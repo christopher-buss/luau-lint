@@ -1,0 +1,3 @@
+[submodule "lute"]
+	path = lute
+	url = https://github.com/luau-lang/lute

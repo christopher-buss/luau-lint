@@ -1,0 +1,30 @@
+# Build outputs
+/target/
+/dist/
+*.exe
+
+# IDE files
+.vscode/settings.json
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Luau/Lune temporary files
+*.luau.tmp
+
+node_modules/
+
+# Rust specific
+Cargo.lock
+*.pdb
+
+# Test outputs
+test-results/
+coverage/

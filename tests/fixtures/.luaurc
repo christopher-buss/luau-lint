@@ -1,0 +1,8 @@
+{
+    "languageMode": "nocheck",
+    "aliases": {
+        "batteries": "./lute/batteries",
+        "std": "./lute/std/libs",
+        "lute": "./lute/definitions"
+    }
+}
