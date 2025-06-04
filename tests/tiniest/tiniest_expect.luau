@@ -2,6 +2,7 @@
 --!strict
 
 local tiniest_quote = require("./tiniest_quote")
+local types = require("./types")
 
 local tiniest_expect = {}
 
@@ -144,4 +145,4 @@ function tiniest_expect.expect(a: any)
 	return tests
 end
 
-return tiniest_expect
+return tiniest_expect :: types.ExpectChain
