@@ -191,7 +191,7 @@ local function isValidErrorType(errorType: string): boolean
 	return false
 end
 
---[=[
+--[=[ 
 	Checks if a value is already a properly structured LintError.
 	
 	Used internally to avoid double-wrapping errors and to validate error structures.

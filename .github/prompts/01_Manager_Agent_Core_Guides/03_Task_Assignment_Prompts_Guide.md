@@ -80,6 +80,7 @@ Below is a recommended structure. You should adapt this template, adding, removi
 
 *   **Define Success:** Clearly describe what constitutes successful completion of the task.
 *   **Specify Deliverables:** List the expected outputs (e.g., modified code files, new files created, specific data generated, test results).
+*   **Documentation Location Standard:** All design documents, reports, and architectural documentation should be placed in `.github/reports/` directory for centralized project documentation and future reference.
 *   **Format (If applicable):** Specify any required format for the output.
 
 ## 6. Memory Bank Logging Instructions (Mandatory)

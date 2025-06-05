@@ -103,7 +103,7 @@ You must design and document the following core architecture components:
 **Define Success:** Successful completion means producing a comprehensive architectural design document that clearly defines all core system components, their interactions, and implementation strategies, along with comprehensive test coverage for any implemented components.
 
 **Specify Deliverables:** 
-1. **Architecture Design Document** (`src/architecture/core-design.md`) containing:
+1. **Architecture Design Document** (`.github/reports/core-architecture-design.md`) containing:
    - Detailed component diagrams and interaction flows
    - Configuration file format specification with examples
    - CLI interface specification with command examples
@@ -112,11 +112,11 @@ You must design and document the following core architecture components:
    - Integration plan with Lute/Luau parser
 
 2. **Configuration Schema Examples:**
-   - Sample `luau-lint.toml` configuration files
+   - Sample `luau-lint.toml` configuration files (`.github/reports/config-examples/`)
    - Schema validation rules and documentation
 
 3. **API Interface Definitions:**
-   - Core module interface specifications
+   - Core module interface specifications (`.github/reports/api-specifications.md`)
    - Function signatures for key components
    - Data structure definitions
 
