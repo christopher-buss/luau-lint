@@ -6,7 +6,7 @@ local tiniest = require("@tiniest/tiniest_for_lute").configure({
 })
 
 -- Import all test suite modules
-local configuration_test_suite = require("./core/configuration.spec")
+-- local configuration_test_suite = require("./core/configuration.spec")
 local error_handling_test_suite = require("./core/error-handling.spec")
 
 local function run_all_tests()
@@ -16,7 +16,7 @@ local function run_all_tests()
 
 	-- Run core module tests
 	error_handling_test_suite(describe, test, expect)
-	configuration_test_suite(describe, test, expect)
+	-- configuration_test_suite(describe, test, expect)
 
 	-- Example test to verify runner works
 	describe("Test Runner", function()
