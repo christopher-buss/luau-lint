@@ -2,6 +2,18 @@
 
 Project Goal: Develop a modern, extensible Luau linter that provides plugin support, autofix capabilities, cross-file analysis, and excellent developer experience, addressing limitations of existing tools like Selene.
 
+## Architecture Decisions Overview
+
+**Core Architecture:** Listener Pattern for rule implementation has been chosen over Visitor Pattern for optimal developer experience and performance. See comprehensive design documents in `.github/reports/architecture/` for detailed specifications.
+
+**Key Design Documents:**
+- **Rule Pattern Decision:** `.github/reports/architecture/rule-pattern-decision.md` - Rationale for listener pattern choice
+- **API Interfaces:** `.github/reports/architecture/api-interfaces.md` - Complete interface definitions
+- **Listener Implementation:** `.github/reports/architecture/listener-pattern.md` - Technical implementation details
+- **Rule Development Guide:** `docs/guides/writing-rules.md` - Comprehensive guide for rule authors
+
+**Performance Strategy:** Single-pass AST traversal with batched rule execution (multiple rules per node type) for optimal performance with 200+ rules.
+
 ## Memory Bank Configuration
 **Approved System:** Multi-file directory structure (`.github/memory/`) with phase-based organization due to project complexity, multiple specialized tasks, and long-term development requirements.
 
@@ -69,79 +81,93 @@ Objective: Create comprehensive testing framework for the linter with fixtures a
 ## Phase 2: Plugin System & Rule Engine - Agent Group Beta
 
 ### Task 2.1 - Agent_Plugin_API: Plugin System Architecture
-Objective: Design and implement the core plugin API that allows users to create custom linting rules with ESLint-like developer experience.
+Objective: Implement the core plugin API with listener pattern architecture that allows users to create custom linting rules with ESLint-like developer experience.
 
-1. Design plugin API architecture.
-   - Define plugin interface and lifecycle hooks.
-   - Create rule registration and discovery mechanisms.
-   - Design AST visitor pattern API for rule authors.
-   - Plan plugin configuration and options system.
-   - Guidance: Follow ESLint plugin patterns for familiarity while adapting to Luau specifics.
+**Reference Documents:**
+- `.github/reports/architecture/api-interfaces.md` - Core API interface definitions
+- `.github/reports/architecture/listener-pattern.md` - Listener pattern implementation details
+- `.github/reports/architecture/rule-pattern-decision.md` - Architectural decision rationale
+- `docs/guides/writing-rules.md` - Rule development guide
 
-2. Implement plugin loading system.
-   - Create plugin discovery and loading mechanisms.
-   - Add plugin validation and error handling.
-   - Implement plugin dependency resolution.
-   - Build plugin configuration merging system.
+1. Implement listener pattern API architecture.
+   - Implement Rule interface with listener-based node handling (as defined in api-interfaces.md).
+   - Create RuleContext with reporting, fixing, and AST utility methods.
+   - Build rule registration system with node type batching for performance.
+   - Implement plugin configuration and options system with schema validation.
+   - Guidance: Follow the listener pattern specification from architecture documents.
 
-3. Build rule registration framework.
-   - Create rule metadata system (name, description, category, severity).
-   - Implement rule option parsing and validation.
-   - Add rule enabling/disabling per file or globally.
-   - Design rule execution context and utilities.
+2. Build plugin loading and management system.
+   - Create plugin discovery mechanisms (file system and package-based).
+   - Add plugin validation using defined Rule interface contracts.
+   - Implement plugin dependency resolution and loading order.
+   - Build configuration merging system supporting cascading configs.
+
+3. Implement rule execution engine.
+   - Create efficient single-pass AST traversal with batched rule execution.
+   - Build rule metadata system (id, category, severity, fixable flag).
+   - Implement rule filtering and enabling/disabling per file or globally.
+   - Add rule lifecycle hooks (beforeFile, afterFile) as specified.
 
 4. Create plugin development utilities.
-   - Build AST helper functions for common patterns.
+   - Implement AST helper functions for common patterns (as defined in RuleContext).
    - Add debugging and testing utilities for plugin authors.
-   - Create plugin template and scaffolding tools.
-   - Implement plugin documentation generation.
+   - Create plugin template and scaffolding tools following listener pattern.
+   - Build plugin documentation generation from rule metadata.
 
 ### Task 2.2 - Agent_Rule_Engine: Core Rule Engine Implementation
-Objective: Build the rule execution engine that efficiently processes AST nodes and manages rule lifecycle.
+Objective: Build the rule execution engine that efficiently processes AST nodes using the listener pattern with batched rule execution.
 
-1. Implement AST traversal engine.
-   - Create efficient AST visitor pattern implementation.
-   - Add selective node visiting for performance optimization.
-   - Implement rule filtering based on AST node types.
-   - Build context tracking for rule execution.
-   - Guidance: Leverage Lute's visitor system for optimal performance.
+**Reference Documents:**
+- `.github/reports/architecture/listener-pattern.md` - Implementation specifications
+- `.github/reports/architecture/api-interfaces.md` - Rule engine interfaces
+
+1. Implement listener-based AST traversal engine.
+   - Create single-pass AST traversal with listener pattern execution.
+   - Implement rule batching by node type for optimal performance (multiple rules per node type).
+   - Add selective node visiting based on registered rule interests.
+   - Build rule execution context with file information and utilities.
+   - Guidance: Follow listener pattern implementation from architecture documents.
 
 2. Build rule execution framework.
-   - Create rule execution context with file information.
-   - Implement rule error collection and aggregation.
+   - Implement RuleContext with reporting, fixing, and AST utility methods.
+   - Create issue collection and aggregation system with LintIssue format.
    - Add rule execution timing and performance monitoring.
-   - Build rule dependencies and ordering system.
+   - Build rule lifecycle management (beforeFile, afterFile hooks).
 
-3. Design issue reporting system.
-   - Define issue severity levels and categorization.
-   - Create issue location tracking (line, column, range).
-   - Implement issue message templating and formatting.
-   - Add issue metadata for IDE integration.
+3. Design issue reporting and fix system.
+   - Implement LintIssue format with severity levels and categorization.
+   - Create precise issue location tracking (line, column, range).
+   - Build fix creation and application system with TextChange support.
+   - Add issue metadata for IDE integration and rule identification.
 
 4. Establish rule performance optimization.
-   - Implement AST node caching where beneficial.
-   - Add rule execution batching for efficiency.
+   - Implement rule interest registration to minimize unnecessary calls.
+   - Add rule execution batching for nodes with multiple interested rules.
    - Create early termination mechanisms for failed files.
-   - Build memory usage optimization for large files.
+   - Build memory usage optimization for large files with many rules.
 
 ### Task 2.3 - Agent_Built_In_Rules: Built-in Rule Collection
-Objective: Implement a comprehensive collection of built-in linting rules covering common Luau patterns and best practices.
+Objective: Implement a comprehensive collection of built-in linting rules using the listener pattern architecture.
 
-1. Port and enhance POC rules.
-   - Expand ipairs/pairs detection rule from concept.luau.
-   - Add comprehensive configuration options.
-   - Improve rule accuracy and reduce false positives.
-   - Add autofix preparation for existing rules.
+**Reference Documents:**
+- `docs/guides/writing-rules.md` - Rule development guide and best practices
+- `.github/reports/architecture/listener-pattern.md` - Listener pattern implementation
+
+1. Port and enhance POC rules using listener pattern.
+   - Convert existing ipairs/pairs detection rule to listener pattern architecture.
+   - Add comprehensive configuration options with schema validation.
+   - Improve rule accuracy and reduce false positives using RuleContext utilities.
+   - Add autofix capabilities using createFix methods from RuleContext.
 
 2. Implement foundational Luau rules.
-   - Create unused variable detection.
-   - Add undefined variable/function detection.
+   - Create unused variable detection using listener pattern.
+   - Add undefined variable/function detection with cross-reference tracking.
    - Implement type annotation enforcement rules.
-   - Build naming convention checking (camelCase, snake_case, etc.).
+   - Build naming convention checking (camelCase, snake_case, etc.) with configurable patterns.
 
 3. Add style and best practice rules.
    - Implement line length and formatting checks.
-   - Create indentation and whitespace rules.
+   - Create indentation and whitespace rules with autofix.
    - Add function complexity and nesting level limits.
    - Build comment and documentation requirement rules.
 
@@ -149,37 +175,41 @@ Objective: Implement a comprehensive collection of built-in linting rules coveri
    - Add table construction optimization rules.
    - Implement string interpolation best practices.
    - Create coroutine usage pattern checking.
-   - Add performance optimization suggestions.
+   - Add performance optimization suggestions with severity levels.
 
 ## Phase 3: Advanced Features - Agent Group Gamma
 
 ### Task 3.1 - Agent_Autofix: Autofix Engine Implementation
-Objective: Develop comprehensive autofix capabilities that can safely transform code to resolve linting issues.
+Objective: Develop comprehensive autofix capabilities that integrate with the listener pattern rule system to safely transform code.
 
-1. Design autofix architecture.
-   - Create safe transformation system with rollback capabilities.
-   - Define autofix metadata and capability descriptions.
-   - Design conflict resolution for overlapping fixes.
-   - Plan preview and confirmation mechanisms.
-   - Guidance: Ensure all transformations preserve semantic meaning.
+**Reference Documents:**
+- `.github/reports/architecture/api-interfaces.md` - Fix interfaces and TextChange definitions
+- `.github/reports/architecture/listener-pattern.md` - RuleContext fix creation methods
 
-2. Implement code transformation engine.
-   - Build AST-to-code generation system.
-   - Create precise text manipulation utilities.
-   - Add format preservation during transformations.
-   - Implement transformation validation and safety checks.
+1. Implement autofix architecture integrated with listener pattern.
+   - Extend RuleContext.createFix method for safe transformation creation.
+   - Build FixResult system with TextChange application and validation.
+   - Design conflict resolution for overlapping fixes from multiple rules.
+   - Plan preview and confirmation mechanisms with fix metadata.
+   - Guidance: Leverage RuleContext fix creation infrastructure from listener pattern.
 
-3. Build autofix rule integration.
-   - Extend plugin API to support autofix suggestions.
-   - Create autofix testing framework for rule authors.
-   - Add autofix metadata to issue reporting.
-   - Implement batch autofix application.
+2. Build code transformation engine.
+   - Implement TextChange application system with precise range handling.
+   - Create format preservation during transformations using source text utilities.
+   - Add transformation validation and safety checks via RuleContext.
+   - Build rollback capabilities for failed or conflicting transformations.
+
+3. Extend plugin API for autofix integration.
+   - Enhance Rule interface to support fixable flag and fix method.
+   - Create autofix testing framework for rule authors using RuleContext.
+   - Add autofix metadata to LintIssue reporting via rule context.
+   - Implement batch autofix application with conflict detection.
 
 4. Create autofix CLI interface.
-   - Add --fix command line option.
-   - Implement interactive fix selection mode.
-   - Create dry-run preview functionality.
-   - Add fix application reporting and summaries.
+   - Add --fix command line option with integration to rule engine.
+   - Implement interactive fix selection mode with rule metadata display.
+   - Create dry-run preview functionality showing proposed TextChanges.
+   - Add fix application reporting and summaries with rule attribution.
 
 ### Task 3.2 - Agent_Cross_File: Cross-File Analysis System
 Objective: Implement cross-file analysis capabilities to detect issues that span multiple files and maintain consistency across projects.
@@ -325,14 +355,20 @@ Objective: Prepare the linter for production use with proper packaging, distribu
 **Critical Path:** Phase 1 → Phase 2 → Phase 3 → Phase 4
 **Parallel Opportunities:**
 - Task 1.2 (Testing) can run parallel with Task 1.1 after basic architecture
-- Task 2.2 (Rule Engine) can start after Task 2.1 API design is complete
+- Task 2.2 (Rule Engine) can start after Task 2.1 listener pattern API is implemented
 - Task 4.1 (Documentation) can begin early and continue throughout
 - Performance optimization (Task 3.3) can be ongoing
 
 **Key Integration Points:**
-- Plugin API design (Task 2.1) must be finalized before built-in rules (Task 2.3)
-- Autofix engine (Task 3.1) requires stable rule engine (Task 2.2)
-- Cross-file analysis (Task 3.2) needs core architecture from Phase 1
-- IDE integration (Task 4.2) depends on stable CLI and plugin system
+- **Listener Pattern API** (Task 2.1) must be implemented before rule engine (Task 2.2) and built-in rules (Task 2.3)
+- **Autofix engine** (Task 3.1) requires stable RuleContext and fix creation infrastructure from listener pattern
+- **Cross-file analysis** (Task 3.2) needs core architecture from Phase 1 and rule engine from Phase 2
+- **IDE integration** (Task 4.2) depends on stable CLI, plugin system, and LintIssue format
 
-**Lute Dependency Management:** All agents must coordinate with Lute version updates and ensure compatibility with official Luau parser changes.
+**Architecture Decisions Made:**
+- **Listener Pattern** chosen over Visitor Pattern for rule implementation (see `.github/reports/architecture/rule-pattern-decision.md`)
+- **API interfaces** defined for Rule, RuleContext, and LintIssue (see `.github/reports/architecture/api-interfaces.md`)
+- **Single-pass traversal** with batched rule execution for performance optimization
+- **RuleContext utilities** provide comprehensive AST manipulation and reporting capabilities
+
+**Lute Dependency Management:** All agents must coordinate with Lute version updates and ensure compatibility with official Luau parser changes while maintaining the listener pattern abstraction.

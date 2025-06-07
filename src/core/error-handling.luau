@@ -371,28 +371,6 @@ local function createErrorHandler(options: ErrorHandlerOptions?): ErrorHandler
 end
 
 --[=[
-	Executes a function with graceful error handling and fallback value.
-	
-	This utility function provides a safe way to execute potentially failing operations
-	with a fallback value. If the function succeeds, its result is returned. If it fails,
-	the fallback value is returned instead, preventing the error from propagating.
-	
-	@param fn () -> T -- The function to execute safely
-	@param fallback T -- The value to return if the function fails
-	@return T -- Either the function's result or the fallback value
-	
-	@since v0.1.0
-]=]
-local function handleGracefully<T>(fn: () -> T, fallback: T): T
-	local success, result = pcall(fn)
-	if success then
-		return result
-	else
-		return fallback
-	end
-end
-
---[=[
 	Retries a function multiple times with exponential backoff on failure.
 	
 	This utility provides resilience against transient failures by attempting
@@ -419,51 +397,10 @@ local function retryWithBackoff<T>(fn: () -> T, maxRetries: number): T?
 	return nil
 end
 
---[=[
-	@prop createLintError (errorType: ErrorType, message: string, context: ErrorContext?) -> LintError
-	@within ErrorHandling
-	
-	Creates a validated LintError with the specified type, message, and optional context.
-	This is the primary function for creating structured errors throughout luau-lint.
-]=]
-
---[=[
-	@prop wrapError (originalError: any, context: ErrorContext) -> LintError  
-	@within ErrorHandling
-	
-	Wraps any error into a LintError structure. Essential for converting native Luau errors
-	and other error types into the structured format used throughout luau-lint.
-]=]
-
---[=[
-	@prop createErrorHandler (options: ErrorHandlerOptions?) -> ErrorHandler
-	@within ErrorHandling
-	
-	Creates a configurable error handler with customizable behavior for processing,
-	reporting, and determining actions when errors occur.
-]=]
-
---[=[
-	@prop handleGracefully <T>(fn: () -> T, fallback: T) -> T
-	@within ErrorHandling
-	
-	Executes a function with graceful error handling and fallback value.
-	Provides a safe way to execute potentially failing operations.
-]=]
-
---[=[
-	@prop retryWithBackoff <T>(fn: () -> T, maxRetries: number) -> T?
-	@within ErrorHandling
-	
-	Retries a function multiple times on failure. Provides resilience against
-	transient failures by attempting the operation multiple times.
-]=]
-
 -- Export the module
 return {
 	createLintError = createLintError,
 	wrapError = wrapError,
 	createErrorHandler = createErrorHandler,
-	handleGracefully = handleGracefully,
 	retryWithBackoff = retryWithBackoff,
 }

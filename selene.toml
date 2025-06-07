@@ -1,2 +1,5 @@
 std = "luau"
 exclude = ["./tests/fixtures/*.luau"]
+
+[config]
+unused_variable = { ignore_pattern = "^(_|self)" }

@@ -155,24 +155,6 @@ local function error_handling_test_suite(
 		end)
 
 		describe("Graceful error handling utilities", function(): ()
-			test("should handle function gracefully with fallback", function(): ()
-				local function failingFunction(): string
-					error("This function always fails")
-				end
-
-				local result = errorHandling.handleGracefully(failingFunction, "fallback value")
-				expect(result).is("fallback value")
-			end)
-
-			test("should return actual result when function succeeds", function(): ()
-				local function successFunction(): string
-					return "success result"
-				end
-
-				local result = errorHandling.handleGracefully(successFunction, "fallback value")
-				expect(result).is("success result")
-			end)
-
 			test("should retry with backoff on failure", function(): ()
 				local attempts = 0
 				local function flakyFunction(): string

@@ -128,7 +128,9 @@ export type TiniestFramework = {
 export type TiniestForLuteFramework = {
 	describe: DescribeFunction,
 	test: TestFunction,
-	expect: ExpectFunction,
+	expect: {
+		expect: ExpectFunction,
+	},
 	collect_tests: (testSuite: () -> ()) -> { Test },
 	run_tests: (tests: { Test }, options: RunOptions) -> RunResult,
 	save_snapshots: () -> (),

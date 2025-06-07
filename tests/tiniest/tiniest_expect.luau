@@ -48,78 +48,78 @@ end
 function tiniest_expect.expect(a: any)
 	local tests = {}
 
-	function tests.exists()
+	function tests.exists(): types.ExpectChain
 		return if a ~= nil then tests else fail()
 	end
 
-	function tests.never_exists()
+	function tests.never_exists(): types.ExpectChain
 		return if a == nil then tests else fail()
 	end
 
-	function tests.is(b: any)
+	function tests.is(b: any): types.ExpectChain
 		return if a == b then tests else fail()
 	end
 
-	function tests.never_is(b: any)
+	function tests.never_is(b: any): types.ExpectChain
 		return if a ~= b then tests else fail()
 	end
 
-	function tests.is_true()
+	function tests.is_true(): types.ExpectChain
 		check(typeof(a) == "boolean", "expect() value must be boolean")
 		return if a then tests else fail()
 	end
 
-	function tests.never_is_true()
+	function tests.never_is_true(): types.ExpectChain
 		check(typeof(a) == "boolean", "expect() value must be boolean")
 		return if a then tests else fail()
 	end
 
-	function tests.is_a(b: string)
+	function tests.is_a(b: string): types.ExpectChain
 		return if typeof(a) == b then tests else fail()
 	end
 
-	function tests.never_is_a(b: string)
+	function tests.never_is_a(b: string): types.ExpectChain
 		return if typeof(a) ~= b then tests else fail()
 	end
 
-	function tests.has_key(b: any)
+	function tests.has_key(b: any): types.ExpectChain
 		check(is_indexable(a), "expect() value must be indexable")
 		check(b ~= nil, "key cannot be nil")
 		return if a[b] then tests else fail()
 	end
 
-	function tests.never_has_key(b: any)
+	function tests.never_has_key(b: any): types.ExpectChain
 		check(is_indexable(a), "expect() value must be indexable")
 		check(b ~= nil, "key cannot be nil")
 		return if not a[b] then tests else fail(`[{tiniest_quote(b)}] = {tiniest_quote(a[b])}`)
 	end
 
-	function tests.has_value(b: any)
+	function tests.has_value(b: any): types.ExpectChain
 		check(typeof(a) == "table", "expect() value must be table")
 		check(b ~= nil, "value cannot be nil")
 		return if table.find(a, b) then tests else fail()
 	end
 
-	function tests.never_has_value(b: any)
+	function tests.never_has_value(b: any): types.ExpectChain
 		check(typeof(a) == "table", "expect() value must be table")
 		check(b ~= nil, "value cannot be nil")
 		local index = table.find(a, b)
 		return if index == nil then tests else fail(`Found at index {index}`)
 	end
 
-	function tests.fails()
+	function tests.fails(): types.ExpectChain
 		check(typeof(a) == "function", "expect() value must be function")
 		local ok = pcall(a)
 		return if not ok then tests else fail()
 	end
 
-	function tests.never_fails()
+	function tests.never_fails(): types.ExpectChain
 		check(typeof(a) == "function", "expect() value must be function")
 		local ok, err = pcall(a)
 		return if ok then tests else fail(`Failed with {tiniest_quote(err)}`)
 	end
 
-	function tests.fails_with(b: string)
+	function tests.fails_with(b: string): types.ExpectChain
 		check(typeof(a) == "function", "expect() value must be function")
 		local ok, err = pcall(a)
 		return if not ok and err:lower():match(b:lower())
@@ -127,7 +127,7 @@ function tiniest_expect.expect(a: any)
 			else if ok then fail("Did not fail") else fail(`Failed with {tiniest_quote(err)}`)
 	end
 
-	function tests.never_fails_with(b: string)
+	function tests.never_fails_with(b: string): types.ExpectChain
 		check(typeof(a) == "function", "expect() value must be function")
 		local ok, err = pcall(a)
 		return if ok or not err:lower():match(b:lower()) then tests else fail()
@@ -145,4 +145,4 @@ function tiniest_expect.expect(a: any)
 	return tests
 end
 
-return tiniest_expect :: types.ExpectChain
+return tiniest_expect
