@@ -140,16 +140,28 @@ end
 	
 	@since v0.1.0
 ]=]
-function Context.getSourceText(self: SourceContext, range: Rule.SourceRange): string
-	-- Extract text using character offsets
-	local startOffset = range.start.offset
-	local endOffset = range.finish.offset
+function Context.getSourceText(
+	self: SourceContext,
+	node: Rule.LintNode?,
+	beforeCount: number?,
+	afterCount: number?
+): string
+	print(node)
+	if node == nil then
+		return self.sourceText
+	end
 
+	-- Extract text using character offsets
+	local startOffset = (node.location.start.offset or 0) - (beforeCount or 0)
+	local endOffset = (node.location.finish.offset or 0) + (afterCount or 0)
+
+	print(startOffset, endOffset)
 	if startOffset < 0 or endOffset > #self.sourceText or startOffset > endOffset then
 		error("Invalid source range")
 	end
 
-	return string.sub(self.sourceText, startOffset + 1, endOffset)
+	print(self.sourceText)
+	return string.sub(self.sourceText, startOffset, endOffset)
 end
 
 --[=[

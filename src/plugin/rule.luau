@@ -309,7 +309,12 @@ export type RuleContext = {
 	report: (self: RuleContext, issue: RuleIssue) -> (),
 	ruleId: string,
 	createFix: (self: RuleContext, range: SourceRange, text: string) -> RuleFix,
-	getSourceText: (self: RuleContext, range: SourceRange) -> string,
+	getSourceText: (
+		self: RuleContext,
+		node: LintNode?,
+		beforeCount: number?,
+		afterCount: number?
+	) -> string,
 	extend: (self: RuleContext, newContext: RuleContext) -> RuleContext,
 }
 
@@ -341,6 +346,8 @@ export type SourceRange = {
 	finish: SourcePosition,
 }
 
+type Source = { location: SourceRange }
+
 --[=[
 	@interface RuleFix
 	@within Rule
@@ -367,6 +374,8 @@ export type RuleFix = {
 	any kind of AST node regardless of its specific category.
 ]]
 export type AstNode = Luau.AstType | Luau.AstExpr | Luau.AstStat
+
+export type LintNode = AstNode & Source
 
 --[=[
 	@interface RuleIssue

@@ -1,9 +1,9 @@
 {
     "languageMode": "strict",
     "aliases": {
-        "Batteries": "./lute/batteries",
-        "Std": "./lute/std/libs",
-        "Lute": "./lute/definitions",
-        "Tiniest": "./tests/tiniest"
+        "batteries": "./lute/batteries",
+        "std": "./lute/std/libs",
+        "lute": "./lute/definitions",
+        "tiniest": "./tests/tiniest"
     }
 }

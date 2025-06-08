@@ -36,15 +36,18 @@
 	@since v0.1.0
 ]=]
 
+local Luau = require("@lute/Luau")
+local Result = require("@batteries/result")
+
 local Context = require("./context")
 local ErrorHandling = require("../core/error-handling")
 local Registry = require("./registry")
 local Rule = require("./rule")
 
-local result = require("@Batteries/result")
-
 type AstNode = Rule.AstNode
+type AstStatBlock = Luau.AstStatBlock
 type LintError = ErrorHandling.LintError
+type LintNode = Rule.LintNode
 type NodeListener = Rule.NodeListener
 type NodeListenerWithExit = Rule.NodeListenerWithExit
 type NodeTag = Rule.NodeTag
@@ -55,7 +58,19 @@ type RuleType = Rule.Rule
 
 local createLintError = ErrorHandling.createLintError
 
---[=[
+local function merge<T, U>(source0: T, source1: U): T & U
+	local result = table.clone(source0)
+
+	assert(type(source1) == "table", "Luau")
+
+	for key, value in source1 :: any do
+		(result :: any)[key] = value
+	end
+
+	return result
+end
+
+--[=[ 
 	@interface LintResult
 	@within RuleEngine
 	.issues { LintIssue } -- Array of all issues found during linting
@@ -96,10 +111,11 @@ export type LintIssue = RuleIssue & {
 	Statistics about the linting process.
 ]=]
 export type LintStats = {
-	rulesExecuted: number,
-	nodesVisited: number,
-	issuesFound: number,
 	executionTimeMs: number,
+	fixableIssues: number,
+	issuesFound: number,
+	nodesVisited: number,
+	rulesExecuted: number,
 }
 
 --[=[
@@ -111,7 +127,7 @@ export type LintStats = {
 	Engine interface for executing rules against AST nodes.
 ]=]
 export type RuleEngine = {
-	lintFile: (ast: AstNode, sourceText: string, filename: string) -> LintResult,
+	lintFile: (ast: AstStatBlock, sourceText: string, filename: string) -> LintResult, -- Changed AstNode to AstStatBlock
 	lintNode: (node: AstNode, sourceText: string, filename: string) -> LintResult,
 }
 
@@ -128,22 +144,48 @@ export type RuleEngine = {
 ]=]
 local function createRuleEngine(registry: RuleRegistry): RuleEngine
 	--[=[
+		Calculates the starting character offset for each line in the source text.
+		Line numbers are 1-indexed. Character offsets are 0-indexed.
+		
+		@param sourceText string -- The source code of the file
+		@return {number} -- An array where the index is the line number (1-based)
+			and the value is the character offset (0-based) of the start of that line.
+	]=]
+	local function calculateLineStartOffsets(sourceText: string): { number }
+		local offsets = { 0 } -- Line 1 (1-indexed) starts at character offset 0
+		local currentCharacterOffset = 0
+		for i = 1, #sourceText do
+			-- currentCharacterOffset is the 0-indexed offset of the character sourceText:sub(i,i)
+			if sourceText:sub(i, i) == "\n" then
+				if i < #sourceText then -- Ensure there's a next line
+					-- The character after \n is at currentCharacterOffset + 1
+					table.insert(offsets, currentCharacterOffset + 1)
+				end
+			end
+			currentCharacterOffset += 1
+		end
+		return offsets
+	end
+
+	--[=[
 		Recursively traverses an AST node and its children.
 		
 		@param node any -- The AST node to traverse
 		@param visitors { [NodeType]: { { rule: RegisteredRule, listener: NodeListener | NodeListenerWithExit } } } -- Map of node types to listeners
 		@param context { [string]: any } -- Map of rule IDs to contexts
 		@param stats LintStats -- Statistics object to update
+		@param lineStartOffsets {number} -- Array of character offsets for the start of each line
 		
 		@since v0.1.0
 	]=]
 	local function traverseNode(
-		node: AstNode,
+		node: LintNode,
 		visitors: {
 			[NodeTag]: { { rule: RegisteredRule, listener: NodeListener | NodeListenerWithExit } },
 		},
 		contexts: { [string]: any },
-		stats: LintStats
+		stats: LintStats,
+		lineStartOffsets: { number }
 	): ()
 		if type(node) ~= "table" then
 			return
@@ -151,13 +193,25 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 
 		stats.nodesVisited += 1
 
+		-- Calculate and attach character offsets if location is available
+		local loc = node.location
+		-- Luau.Position line is 1-based, column is 0-based
+		local startCharOffset = lineStartOffsets[loc.begin.line] + loc.begin.column
+		-- Assuming loc["end"] is an exclusive end position (points to the char *after* the node)
+		local endCharOffset = lineStartOffsets[loc["end"].line] + loc["end"].column;
+
+		(node :: any).charOffsetRange = {
+			start = startCharOffset, -- Inclusive start character offset
+			finish = endCharOffset, -- Exclusive end character offset
+		}
+
 		-- Call enter listeners for this node type
 		local nodeVisitors = (visitors :: {
 			[string]: { { rule: RegisteredRule, listener: NodeListener | NodeListenerWithExit } },
 		})[node.tag]
 		if nodeVisitors then
 			for _, visitor in nodeVisitors do
-				local status = result.pcall(function(): nil
+				local status = Result.pcall(function(): nil
 					local listener = visitor.listener
 					if type(listener) == "function" then
 						-- Simple function listener
@@ -188,7 +242,7 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 		-- Recursively traverse child nodes
 		local nodeTable = node :: { [string]: any }
 		for key, value in nodeTable do
-			if key ~= "parent" and key ~= "type" and key ~= "kind" then
+			if key ~= "parent" and key ~= "type" and key ~= "kind" and key ~= "charOffsetRange" then -- Avoid re-traversing our new property
 				if type(value) == "table" then
 					-- Check if it's an array by looking for numeric indices
 					local valueTable = value :: { [any]: any }
@@ -200,11 +254,23 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 					if isArray then
 						-- Array of nodes
 						for _, childNode in valueTable do
-							traverseNode(childNode :: AstNode, visitors, contexts, stats)
+							traverseNode(
+								childNode :: AstNode,
+								visitors,
+								contexts,
+								stats,
+								lineStartOffsets
+							)
 						end
 					else
 						-- Single child node
-						traverseNode(valueTable :: AstNode, visitors, contexts, stats)
+						traverseNode(
+							valueTable :: AstNode,
+							visitors,
+							contexts,
+							stats,
+							lineStartOffsets
+						)
 					end
 				end
 			end
@@ -213,7 +279,7 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 		-- Call exit listeners for this node type
 		if nodeVisitors then
 			for _, visitor in nodeVisitors do
-				local status = result.pcall(function(): nil
+				local status = Result.pcall(function(): nil
 					local listener = visitor.listener
 					if type(listener) == "table" and listener.exit then
 						-- Object with exit function
@@ -238,6 +304,50 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 		end
 	end
 
+	local function getLoc(node: (Rule.AstNode & { location: Luau.Location? })?): Rule.SourceRange?
+		if node == nil or node.location == nil then
+			return nil
+		end
+
+		return {
+			start = {
+				line = node.location.begin.line,
+				column = node.location.begin.column,
+			},
+			finish = {
+				line = node.location["end"].line,
+				column = node.location["end"].column,
+			},
+		}
+	end
+
+	local lintNodes: { [AstNode]: LintNode } = {}
+
+	local function createLintNode(node: AstNode): LintNode
+		local existingNode = lintNodes[node]
+		if existingNode then
+			return existingNode
+		end
+
+		local lintNode: LintNode = merge(node, {
+			location = {
+				start = {
+					line = 1,
+					column = 2,
+					offset = 5,
+				},
+				finish = {
+					line = 3,
+					column = 4,
+					offset = 6,
+				},
+			},
+		})
+
+		lintNodes[node] = lintNode
+		return lintNode
+	end
+
 	--[=[
 		Lints a complete AST representing a file.
 		
@@ -248,17 +358,18 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 		
 		@since v0.1.0
 	]=]
-	local function lintFile(ast: AstNode, sourceText: string, filename: string): LintResult
+	local function lintFile(ast: AstStatBlock, sourceText: string, filename: string): LintResult
 		local startTime = os.clock()
 
 		-- Initialize result collections
 		local allIssues: { LintIssue } = {}
 		local allErrors: { LintError } = {}
 		local lintStats: LintStats = {
-			rulesExecuted = 0,
-			nodesVisited = 0,
-			issuesFound = 0,
 			executionTimeMs = 0,
+			fixableIssues = 0,
+			issuesFound = 0,
+			nodesVisited = 0,
+			rulesExecuted = 0,
 		}
 
 		-- Get all registered rules
@@ -271,6 +382,9 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 				lintStats = lintStats,
 			}
 		end
+
+		-- Calculate line start offsets once per file
+		local lineStartOffsets = calculateLineStartOffsets(sourceText)
 
 		-- Create contexts for each rule
 		local contexts: { [string]: any } = {}
@@ -298,18 +412,19 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 						ruleId = registeredRule.rule.id,
 						message = issue.message,
 						node = issue.node,
-						loc = issue.loc,
+						loc = issue.loc or getLoc(issue.node :: any),
 						fix = issue.fix,
 					}
 					table.insert(allIssues, lintIssue)
 					lintStats.issuesFound += 1
+					lintStats.fixableIssues += if issue.fix ~= nil then 1 else 0
 				end,
 			})
 
 			contexts[registeredRule.rule.id] = context
 
 			-- Get listeners from the rule
-			local status = result.pcall(function(): Rule.ListenerMap
+			local status = Result.pcall(function(): Rule.ListenerMap
 				return registeredRule.rule.create(context :: any)
 			end)
 			if status.success == false then
@@ -347,8 +462,10 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 			end
 		end
 
-		-- Traverse the AST
-		traverseNode(ast, visitors, contexts, lintStats)
+		for _, statement in ast.statements do
+			-- Traverse the AST
+			traverseNode(createLintNode(statement), visitors, contexts, lintStats, lineStartOffsets)
+		end
 
 		-- Calculate execution time
 		lintStats.executionTimeMs = (os.clock() - startTime) * 1000
@@ -372,6 +489,7 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 	]=]
 	local function lintNode(node: AstNode, sourceText: string, filename: string): LintResult
 		-- For single node linting, we treat the node as the root
+		-- This will implicitly use the new lineStartOffsets logic via lintFile
 		return lintFile(node, sourceText, filename)
 	end
 
