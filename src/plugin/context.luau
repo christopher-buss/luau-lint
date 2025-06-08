@@ -31,7 +31,7 @@ type Pick<K, V> = types.Pick<K, V>
 		return {
 			[NODE_TYPES.Local] = function(node)
 				if node.name == "badName" then
-					context.report({
+					context:report({
 						message = "Avoid using 'badName' as identifier",
 						node = node,
 						fix = context.createFix(

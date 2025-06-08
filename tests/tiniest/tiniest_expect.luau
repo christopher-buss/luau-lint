@@ -57,7 +57,9 @@ function tiniest_expect.expect(a: any)
 	end
 
 	function tests.is(b: any): types.ExpectChain
-		return if a == b then tests else fail()
+		return if a == b
+			then tests
+			else fail(`Expected {tiniest_quote(a)} to be {tiniest_quote(b)}`)
 	end
 
 	function tests.never_is(b: any): types.ExpectChain
