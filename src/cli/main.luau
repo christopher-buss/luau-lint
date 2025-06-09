@@ -47,9 +47,7 @@ local generalizedIterationRule: Rule.Rule = {
 
 	create = function(context: PluginApi.RuleContext): Rule.ListenerMap
 		return {
-			[Rule.NODE_TYPES.ForIn] = function(
-				node: Luau.AstStatForIn & { location: Rule.SourceRange }
-			): ()
+			[Rule.NODE_TYPES.ForIn] = function(node: Luau.AstStatForIn & Rule.LintNode): ()
 				if #node.values == 0 then
 					return
 				end
@@ -65,12 +63,13 @@ local generalizedIterationRule: Rule.Rule = {
 					return
 				end
 
-				-- print(context:getSourceText(node, -1, 5))
-
-				print(pp(firstValue))
+				print(context:getSourceText(node, -1, 5))
 
 				-- remove #funcName from start of text
-				-- local fixedText = string.gsub(node.source, "#%s*" .. funcName, "")
+				-- local fixedText = string.gsub(node.source, "#%s*" ..
+				-- funcName, "")
+
+				print("reporting error")
 
 				context:report({
 					node = node,

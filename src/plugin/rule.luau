@@ -389,7 +389,7 @@ export type LintNode = AstNode & Source
 ]=]
 export type RuleIssue = {
 	message: string,
-	node: AstNode?,
+	node: LintNode?,
 	loc: SourceRange?,
 	fix: RuleFix?,
 }

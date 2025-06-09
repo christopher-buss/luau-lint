@@ -146,7 +146,6 @@ function Context.getSourceText(
 	beforeCount: number?,
 	afterCount: number?
 ): string
-	print(node)
 	if node == nil then
 		return self.sourceText
 	end
@@ -155,12 +154,10 @@ function Context.getSourceText(
 	local startOffset = (node.location.start.offset or 0) - (beforeCount or 0)
 	local endOffset = (node.location.finish.offset or 0) + (afterCount or 0)
 
-	print(startOffset, endOffset)
 	if startOffset < 0 or endOffset > #self.sourceText or startOffset > endOffset then
 		error("Invalid source range")
 	end
 
-	print(self.sourceText)
 	return string.sub(self.sourceText, startOffset, endOffset)
 end
 

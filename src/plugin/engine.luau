@@ -38,11 +38,13 @@
 
 local Luau = require("@lute/Luau")
 local Result = require("@batteries/result")
+local pp = require("@batteries/pp")
 
 local Context = require("./context")
 local ErrorHandling = require("../core/error-handling")
 local Registry = require("./registry")
 local Rule = require("./rule")
+local VisitorKeys = require("./visitor-keys")
 
 type AstNode = Rule.AstNode
 type AstStatBlock = Luau.AstStatBlock
@@ -167,6 +169,64 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 		return offsets
 	end
 
+	-- local function getLoc(node: Rule.LintNode?): Rule.SourceRange?
+	-- 	if node == nil then
+	-- 		return nil
+	-- 	end
+
+	-- 	return
+
+	-- 	return {
+	-- 		start = {
+	-- 			line = node.location.begin.line,
+	-- 			column = node.location.begin.column,
+	-- 		},
+	-- 		finish = {
+	-- 			line = node.location["end"].line,
+	-- 			column = node.location["end"].column,
+	-- 		},
+	-- 	}
+	-- end
+
+	local lintNodes: { [AstNode]: LintNode } = {}
+
+	local function assign<T, U>(target: T, source: U): T & U
+		for k, v in source :: any do
+			(target :: any)[k] = v
+		end
+
+		return target
+	end
+
+	local function createLintNode(node: AstNode): LintNode
+		if type(node) ~= "table" then
+			return nil
+		end
+
+		local existingNode = lintNodes[node] == true
+		if existingNode then
+			return node
+		end
+
+		local lintNode: LintNode = assign(node, {
+			location = {
+				start = {
+					line = 1,
+					column = 2,
+					offset = 5,
+				},
+				finish = {
+					line = 3,
+					column = 4,
+					offset = 6,
+				},
+			},
+		})
+
+		lintNodes[node] = true
+		return lintNode
+	end
+
 	--[=[
 		Recursively traverses an AST node and its children.
 		
@@ -195,20 +255,17 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 
 		-- Calculate and attach character offsets if location is available
 		local loc = node.location
-		-- Luau.Position line is 1-based, column is 0-based
-		local startCharOffset = lineStartOffsets[loc.begin.line] + loc.begin.column
-		-- Assuming loc["end"] is an exclusive end position (points to the char *after* the node)
-		local endCharOffset = lineStartOffsets[loc["end"].line] + loc["end"].column;
 
-		(node :: any).charOffsetRange = {
-			start = startCharOffset, -- Inclusive start character offset
-			finish = endCharOffset, -- Exclusive end character offset
-		}
+		print(loc.start.line)
+		node.location.start.offset = lineStartOffsets[loc.start.line] + loc.start.column
+		node.location.finish.offset = lineStartOffsets[loc.finish.line] + loc.finish.column
+
+		local nodeType = VisitorKeys.getNodeType(node)
 
 		-- Call enter listeners for this node type
 		local nodeVisitors = (visitors :: {
 			[string]: { { rule: RegisteredRule, listener: NodeListener | NodeListenerWithExit } },
-		})[node.tag]
+		})[nodeType]
 		if nodeVisitors then
 			for _, visitor in nodeVisitors do
 				local status = Result.pcall(function(): nil
@@ -239,39 +296,29 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 			end
 		end
 
-		-- Recursively traverse child nodes
-		local nodeTable = node :: { [string]: any }
-		for key, value in nodeTable do
-			if key ~= "parent" and key ~= "type" and key ~= "kind" and key ~= "charOffsetRange" then -- Avoid re-traversing our new property
-				if type(value) == "table" then
-					-- Check if it's an array by looking for numeric indices
-					local valueTable = value :: { [any]: any }
-					local isArray = false
-					if valueTable[1] ~= nil then
-						isArray = true
-					end
-
-					if isArray then
-						-- Array of nodes
-						for _, childNode in valueTable do
-							traverseNode(
-								childNode :: AstNode,
-								visitors,
-								contexts,
-								stats,
-								lineStartOffsets
-							)
-						end
-					else
-						-- Single child node
+		local keys = VisitorKeys.VisitorKeys[nodeType]
+		if keys and #keys > 0 then
+			-- Recursively traverse child nodes
+			for _, value in keys do
+				local childNode = node[value]
+				if type(childNode) == "table" and childNode[1] ~= nil then
+					for _, child in childNode do
 						traverseNode(
-							valueTable :: AstNode,
+							createLintNode(child),
 							visitors,
 							contexts,
 							stats,
 							lineStartOffsets
 						)
 					end
+				else
+					traverseNode(
+						createLintNode(childNode),
+						visitors,
+						contexts,
+						stats,
+						lineStartOffsets
+					)
 				end
 			end
 		end
@@ -302,50 +349,6 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 				-- Note: In a real implementation, we'd collect these errors
 			end
 		end
-	end
-
-	local function getLoc(node: (Rule.AstNode & { location: Luau.Location? })?): Rule.SourceRange?
-		if node == nil or node.location == nil then
-			return nil
-		end
-
-		return {
-			start = {
-				line = node.location.begin.line,
-				column = node.location.begin.column,
-			},
-			finish = {
-				line = node.location["end"].line,
-				column = node.location["end"].column,
-			},
-		}
-	end
-
-	local lintNodes: { [AstNode]: LintNode } = {}
-
-	local function createLintNode(node: AstNode): LintNode
-		local existingNode = lintNodes[node]
-		if existingNode then
-			return existingNode
-		end
-
-		local lintNode: LintNode = merge(node, {
-			location = {
-				start = {
-					line = 1,
-					column = 2,
-					offset = 5,
-				},
-				finish = {
-					line = 3,
-					column = 4,
-					offset = 6,
-				},
-			},
-		})
-
-		lintNodes[node] = lintNode
-		return lintNode
 	end
 
 	--[=[
@@ -408,11 +411,12 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 				ruleId = registeredRule.rule.id,
 				options = registeredRule.options,
 				report = function(self, issue: RuleIssue): ()
+					print("-------------")
 					local lintIssue: LintIssue = {
 						ruleId = registeredRule.rule.id,
 						message = issue.message,
 						node = issue.node,
-						loc = issue.loc or getLoc(issue.node :: any),
+						loc = issue.node.location,
 						fix = issue.fix,
 					}
 					table.insert(allIssues, lintIssue)
