@@ -407,7 +407,7 @@ local function getNodeType(node: any): string
 
 	for _, pattern in patterns do
 		if pattern.check(node) then
-			return pattern
+			return pattern.type
 		end
 	end
 	-- Fallback if no pattern matches

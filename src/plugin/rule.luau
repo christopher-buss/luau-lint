@@ -346,7 +346,7 @@ export type SourceRange = {
 	finish: SourcePosition,
 }
 
-type Source = { location: SourceRange }
+export type Source = { location: SourceRange }
 
 --[=[
 	@interface RuleFix
@@ -375,7 +375,7 @@ export type RuleFix = {
 ]]
 export type AstNode = Luau.AstType | Luau.AstExpr | Luau.AstStat
 
-export type LintNode = AstNode & Source
+export type LintNode = AstNode
 
 --[=[
 	@interface RuleIssue

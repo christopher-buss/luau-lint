@@ -38,13 +38,18 @@
 
 local Luau = require("@lute/Luau")
 local Result = require("@batteries/result")
-local pp = require("@batteries/pp")
 
 local Context = require("./context")
 local ErrorHandling = require("../core/error-handling")
 local Registry = require("./registry")
 local Rule = require("./rule")
 local VisitorKeys = require("./visitor-keys")
+local pp = require("../pretty-print")
+local types = require("../types")
+
+type Omit<K, V> = types.Omit<K, V>
+type Pick<K, V> = types.Pick<K, V>
+type Required<T> = types.Required<T>
 
 type AstNode = Rule.AstNode
 type AstStatBlock = Luau.AstStatBlock
@@ -59,18 +64,6 @@ type RuleRegistry = Registry.RuleRegistry
 type RuleType = Rule.Rule
 
 local createLintError = ErrorHandling.createLintError
-
-local function merge<T, U>(source0: T, source1: U): T & U
-	local result = table.clone(source0)
-
-	assert(type(source1) == "table", "Luau")
-
-	for key, value in source1 :: any do
-		(result :: any)[key] = value
-	end
-
-	return result
-end
 
 --[=[ 
 	@interface LintResult
@@ -98,11 +91,11 @@ export type LintResult = {
 	
 	An issue found by a rule during linting.
 ]=]
-export type LintIssue = RuleIssue & {
+export type LintIssue = Omit<RuleIssue, "loc"> & Required<Pick<RuleIssue, "loc">> & {
 	ruleId: string,
 }
 
---[=[
+--[=[ 
 	@interface LintStats
 	@within RuleEngine
 	.rulesExecuted number -- Number of rules that were executed
@@ -169,25 +162,6 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 		return offsets
 	end
 
-	-- local function getLoc(node: Rule.LintNode?): Rule.SourceRange?
-	-- 	if node == nil then
-	-- 		return nil
-	-- 	end
-
-	-- 	return
-
-	-- 	return {
-	-- 		start = {
-	-- 			line = node.location.begin.line,
-	-- 			column = node.location.begin.column,
-	-- 		},
-	-- 		finish = {
-	-- 			line = node.location["end"].line,
-	-- 			column = node.location["end"].column,
-	-- 		},
-	-- 	}
-	-- end
-
 	local lintNodes: { [AstNode]: LintNode } = {}
 
 	local function assign<T, U>(target: T, source: U): T & U
@@ -198,30 +172,61 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 		return target
 	end
 
-	local function createLintNode(node: AstNode): LintNode
+	local function normalizeLocation(node: AstNode): Luau.Location?
+		if node.location ~= nil then
+			return node.location
+		end
+
+		if node.position == nil then
+			return nil
+		end
+
+		local startLine = node.position.line
+
+		local startColumn = node.position.column
+		local nodeTextLength = #node.text
+
+		return {
+			begin = {
+				line = startLine,
+				column = startColumn,
+			},
+			["end"] = {
+				line = startLine,
+				column = startColumn + nodeTextLength,
+			},
+		}
+	end
+
+	local function createLintNode(node: AstNode & { location: Luau.Location? }): LintNode
 		if type(node) ~= "table" then
 			return nil
 		end
 
 		local existingNode = lintNodes[node] == true
 		if existingNode then
-			return node
+			return node :: any
 		end
 
-		local lintNode: LintNode = assign(node, {
+		local location = normalizeLocation(node)
+		if not location then
+			return nil
+		end
+
+		local lintNode: LintNode = assign(node :: any, {
 			location = {
 				start = {
-					line = 1,
-					column = 2,
-					offset = 5,
+					line = location.begin.line,
+					column = location.begin.column,
+					offset = -1,
 				},
 				finish = {
-					line = 3,
-					column = 4,
-					offset = 6,
+					line = location["end"].line,
+					column = location["end"].column,
+					offset = -1,
 				},
 			},
-		})
+		}) :: any
 
 		lintNodes[node] = true
 		return lintNode
@@ -247,7 +252,7 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 		stats: LintStats,
 		lineStartOffsets: { number }
 	): ()
-		if type(node) ~= "table" then
+		if type(node) ~= "table" or not node.tag then
 			return
 		end
 
@@ -255,10 +260,11 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 
 		-- Calculate and attach character offsets if location is available
 		local loc = node.location
+		-- pp(node, { depth = 1, keys = { "location" } })
+		-- pp(lineStartOffsets)
 
-		print(loc.start.line)
-		node.location.start.offset = lineStartOffsets[loc.start.line] + loc.start.column
-		node.location.finish.offset = lineStartOffsets[loc.finish.line] + loc.finish.column
+		node.location.start.offset = lineStartOffsets[loc.start.line + 1] + loc.start.column
+		node.location.finish.offset = lineStartOffsets[loc.finish.line + 1] + loc.finish.column
 
 		local nodeType = VisitorKeys.getNodeType(node)
 
@@ -286,15 +292,20 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 				end
 
 				-- Record the error but continue execution
-				local _ruleError = createLintError(
+				local ruleError = createLintError(
 					"RuleError",
 					`Error in rule {visitor.rule.rule.id}`,
-					{ filePath = contexts[visitor.rule.rule.id].filename :: string? }
+					contexts[visitor.rule.rule.id].filename
 				)
+
+				pp(status.err)
 
 				-- TODO:: Collect these errors
 			end
 		end
+
+		-- if node.tag == "global" then
+		-- end
 
 		local keys = VisitorKeys.VisitorKeys[nodeType]
 		if keys and #keys > 0 then
@@ -304,7 +315,7 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 				if type(childNode) == "table" and childNode[1] ~= nil then
 					for _, child in childNode do
 						traverseNode(
-							createLintNode(child),
+							createLintNode(child.node),
 							visitors,
 							contexts,
 							stats,
@@ -346,6 +357,8 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 					`Error in rule {visitor.rule.rule.id} exit`,
 					{ filePath = contexts[visitor.rule.rule.id].filename :: string? }
 				)
+
+				pp(status.err)
 				-- Note: In a real implementation, we'd collect these errors
 			end
 		end
@@ -468,6 +481,7 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 
 		for _, statement in ast.statements do
 			-- Traverse the AST
+
 			traverseNode(createLintNode(statement), visitors, contexts, lintStats, lineStartOffsets)
 		end
 

@@ -10,7 +10,9 @@ local PluginApi = require("../plugin/plugin-api")
 local Process = require("@lute/process") -- Import process type definitions
 local Result = require("@batteries/result")
 local Rule = require("../plugin/rule")
-local pp = require("@batteries/pp")
+local fs = require("@lute/fs")
+local pp = require("../pretty-print")
+local types = require("../types")
 -- local FileProcessor = require("../core/file-processor") -- To be created
 -- local ConfigLoader = require("../config/loader") -- To be created
 
@@ -47,29 +49,12 @@ local generalizedIterationRule: Rule.Rule = {
 
 	create = function(context: PluginApi.RuleContext): Rule.ListenerMap
 		return {
-			[Rule.NODE_TYPES.ForIn] = function(node: Luau.AstStatForIn & Rule.LintNode): ()
-				if #node.values == 0 then
-					return
-				end
-
-				local firstValue = node.values[1].node
-				if firstValue.tag ~= "call" or firstValue.func.tag ~= "global" then
-					return
-				end
-
-				local funcName = firstValue.func.name.text
+			[Rule.NODE_TYPES.Global] = function(node: Luau.AstExprGlobal & Rule.Source): ()
+				local funcName = node.name.text
 
 				if funcName ~= "ipairs" and funcName ~= "pairs" then
 					return
 				end
-
-				print(context:getSourceText(node, -1, 5))
-
-				-- remove #funcName from start of text
-				-- local fixedText = string.gsub(node.source, "#%s*" ..
-				-- funcName, "")
-
-				print("reporting error")
 
 				context:report({
 					node = node,
@@ -157,6 +142,24 @@ local function runLinter(parsedArgs: Args.ParsedArgs): number
 			error(`Error during linting of {filePath}: {tostring(lintStatus.err)}`)
 		end
 
+		for _, issue in lintResult.issues do
+			if issue.fix == nil then
+				continue
+			end
+
+			local startOffset = issue.loc.start.offset
+			local endOffset = issue.loc.finish.offset
+			content = string.sub(content, 1, startOffset)
+				.. issue.fix.text
+				.. string.sub(content, endOffset + 1)
+
+			local _writeStatus = Result.pcall(function()
+				local file = Fs.open(filePath, "w+")
+				fs.write(file, content)
+				return nil
+			end)
+		end
+
 		table.insert(allResults, lintResult)
 	end
 
@@ -174,7 +177,7 @@ local function runLinter(parsedArgs: Args.ParsedArgs): number
 	return exitCode
 end
 
-local function main()
+local function main(): ()
 	local currentProcess = Process
 
 	-- TEMPORARY: Hard-coded file for testing
