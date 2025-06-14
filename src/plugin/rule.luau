@@ -126,6 +126,7 @@ local NODE_TYPES: NodeMap<NodeType, NodeTag> = {
 	This is the actual tag value used internally by the AST parser, while [NodeType] 
 	represents the PascalCase version used in the API.
 ]=]
+--cspell:disable
 export type NodeTag =
 	| "anonymousfunction"
 	| "assign"
@@ -176,6 +177,7 @@ export type NodeTag =
 	| "unary"
 	| "varargs"
 	| "while"
+--cspell:enable
 
 local TAG_TO_NODE = flip(NODE_TYPES :: { [NodeType]: NodeTag })
 
@@ -309,7 +311,12 @@ export type RuleContext = {
 	report: (self: RuleContext, issue: RuleIssue) -> (),
 	ruleId: string,
 	createFix: (self: RuleContext, range: SourceRange, text: string) -> RuleFix,
-	getSourceText: (self: RuleContext, range: SourceRange) -> string,
+	getSourceText: (
+		self: RuleContext,
+		node: LintNode?,
+		beforeCount: number?,
+		afterCount: number?
+	) -> string,
 	extend: (self: RuleContext, newContext: RuleContext) -> RuleContext,
 }
 
@@ -341,6 +348,8 @@ export type SourceRange = {
 	finish: SourcePosition,
 }
 
+export type Source = { location: SourceRange }
+
 --[=[
 	@interface RuleFix
 	@within Rule
@@ -368,6 +377,15 @@ export type RuleFix = {
 ]]
 export type AstNode = Luau.AstType | Luau.AstExpr | Luau.AstStat
 
+export type AnyNode = AstNode & {
+	argLocation: Luau.Location?,
+	location: Luau.Location?,
+	position: Luau.Position?,
+	text: string?,
+}
+
+export type LintNode = AstNode & Source
+
 --[=[
 	@interface RuleIssue
 	@within Rule
@@ -380,7 +398,7 @@ export type AstNode = Luau.AstType | Luau.AstExpr | Luau.AstStat
 ]=]
 export type RuleIssue = {
 	message: string,
-	node: AstNode?,
+	node: LintNode?,
 	loc: SourceRange?,
 	fix: RuleFix?,
 }

@@ -133,23 +133,38 @@ function Context.createFix(self: SourceContext, range: Rule.SourceRange, text: s
 end
 
 --[=[
-	Gets the source text for a specific range, or the entire source if no range provided.
+	Retrieves the source text for a specific node or range with optional padding.
 	
-	@param range any? -- Optional range to extract text from
-	@return string -- The source text for the specified range
+	This method extracts source code text from the current file, either for the entire
+	source (when no node is provided) or for a specific AST node's location. Optional
+	before and after padding allows retrieving additional context around the node.
+	
+	@param node Rule.LintNode? -- The AST node to get source text for (optional)
+	@param beforeCount number? -- Number of characters to include before the node (optional)
+	@param afterCount number? -- Number of characters to include after the node (optional)
+	@return string -- The extracted source text
 	
 	@since v0.1.0
 ]=]
-function Context.getSourceText(self: SourceContext, range: Rule.SourceRange): string
+function Context.getSourceText(
+	self: SourceContext,
+	node: Rule.LintNode?,
+	beforeCount: number?,
+	afterCount: number?
+): string
+	if node == nil then
+		return self.sourceText
+	end
+
 	-- Extract text using character offsets
-	local startOffset = range.start.offset
-	local endOffset = range.finish.offset
+	local startOffset = (node.location.start.offset or 0) - (beforeCount or 0)
+	local endOffset = (node.location.finish.offset or 0) + (afterCount or 0)
 
 	if startOffset < 0 or endOffset > #self.sourceText or startOffset > endOffset then
 		error("Invalid source range")
 	end
 
-	return string.sub(self.sourceText, startOffset + 1, endOffset)
+	return string.sub(self.sourceText, startOffset, endOffset)
 end
 
 --[=[

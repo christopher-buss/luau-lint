@@ -1,8 +1,8 @@
 --!strict
-local Luau = require("@Lute/Luau")
-local result = require("@Batteries/result")
+local Result = require("@Batteries/result")
 
 local Context = require("../../src/plugin/context")
+local Rule = require("../../src/plugin/rule")
 local types = require("../tiniest/types")
 
 type DescribeFunction = types.DescribeFunction
@@ -17,11 +17,11 @@ local mockContext = Context.new({
 
 local mockNode = {
 	tag = "call",
-	argLocation = {
-		begin = { line = 1, column = 17 },
-		["end"] = { line = 1, column = 23 },
+	location = {
+		start = { line = 1, column = 11, offset = 11 },
+		finish = { line = 1, column = 24, offset = 24 },
 	},
-} :: Luau.AstExprCall
+} :: Rule.LintNode
 
 local function ruleContextTestSuite(
 	describe: DescribeFunction,
@@ -47,7 +47,7 @@ local function ruleContextTestSuite(
 					ruleId = "test-rule",
 				})
 
-				local stats = result.pcall(function(): nil
+				local stats = Result.pcall(function(): nil
 					extendedContext.ruleId = "hello"
 					return nil
 				end)
@@ -70,7 +70,7 @@ local function ruleContextTestSuite(
 				context:report({
 					node = mockNode,
 					message = "Avoid using print",
-					location = mockNode.argLocation,
+					location = mockNode.location,
 				})
 
 				expect(#reportedIssues).is(1)
@@ -93,13 +93,9 @@ local function ruleContextTestSuite(
 		end)
 
 		describe("source text access", function(): ()
-			test("should get source text for ranges", function(): ()
-				local range = {
-					start = { line = 1, column = 1, offset = 0 },
-					finish = { line = 1, column = 8, offset = 7 },
-				}
-				local sourceText = mockContext:getSourceText(range)
-				expect(sourceText).is("local x")
+			test("should get source text for node", function(): ()
+				local sourceText = mockContext:getSourceText(mockNode)
+				expect(sourceText).is("print('hello')")
 			end)
 		end)
 
