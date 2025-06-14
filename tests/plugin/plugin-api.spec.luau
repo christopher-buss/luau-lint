@@ -12,8 +12,8 @@ local PluginAPI = require("../../src/plugin/plugin-api")
 local mockNode = {
 	tag = "call",
 	argLocation = {
-		begin = { line = 1, column = 17 },
-		["end"] = { line = 1, column = 23 },
+		begin = { line = 0, column = 17 },
+		["end"] = { line = 0, column = 23 },
 	},
 } :: Luau.AstExprCall
 
@@ -201,10 +201,10 @@ local function plugin_api_test_suite(
 					docsUrl = "https://example.com",
 					create = function(context: PluginAPI.RuleContext): PluginAPI.ListenerMap
 						return {
-							["call"] = function(_node: any)
+							["call"] = function(node: any): ()
 								context:report({
 									message = "Found function call",
-									node = _node,
+									node = node,
 								})
 							end,
 						}
@@ -213,8 +213,7 @@ local function plugin_api_test_suite(
 
 				registry.registerRule(rule)
 
-				-- Test with engine lintNode method (this is the actual API)
-				local result = engine.lintNode(mockNode, "print('hello')", "test.luau")
+				local result = engine:lintNode(mockNode, "print('hello')", "test.luau")
 
 				expect(#result.issues).is(1)
 				expect(result.issues[1].ruleId).is("test-execution-rule")
@@ -234,7 +233,7 @@ local function plugin_api_test_suite(
 					docsUrl = "https://example.com",
 					create = function(_context: PluginAPI.RuleContext): PluginAPI.ListenerMap
 						return {
-							["call"] = function(_node: any)
+							["call"] = function(_node: any): never
 								error("Intentional rule error")
 							end,
 						}
@@ -244,8 +243,8 @@ local function plugin_api_test_suite(
 				registry.registerRule(errorRule)
 
 				-- Should not crash, should handle error gracefully
-				expect(function()
-					engine.lintNode(mockNode, "print('hello')", "test.luau")
+				expect(function(): ()
+					engine:lintNode(mockNode, "print('hello')", "test.luau")
 				end).never_fails()
 			end)
 		end)

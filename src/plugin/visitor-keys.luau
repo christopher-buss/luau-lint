@@ -1,4 +1,4 @@
-local VisitorKeys = {
+local VisitorKeys: { [string]: { string } } = {
 	-- AstExprGroup
 	["group"] = {
 		"openParens",
@@ -361,33 +361,37 @@ local VisitorKeys = {
 	},
 }
 
+type DiscriminatorPattern = {
+	nodeType: string,
+	check: (node: any) -> boolean,
+}
+
 -- Define discriminator patterns for ambiguous tags
-local DiscriminatorPatterns = {
+local DiscriminatorPatterns: { [string]: { DiscriminatorPattern } } = {
 	["function"] = {
 		{
-			type = "statfunction",
-			check = function(node): boolean
+			nodeType = "statfunction",
+			check = function(node: any): boolean
 				return node.name ~= nil
 			end,
 		},
 		{
-			type = "expranonymousfunction",
-			check = function(node): boolean
+			nodeType = "expranonymousfunction",
+			check = function(node: any): boolean
 				return node.name == nil
 			end,
 		},
 	},
 	["local"] = {
 		{
-			type = "statlocal",
-			check = function(node): boolean
+			nodeType = "statlocal",
+			check = function(node: any): boolean
 				return node.variables ~= nil and node.localKeyword ~= nil
 			end,
-			keys = {},
 		},
 		{
-			type = "exprlocal",
-			check = function(node): boolean
+			nodeType = "exprlocal",
+			check = function(node: any): boolean
 				return node.token ~= nil and node["local"] ~= nil
 			end,
 		},
@@ -407,9 +411,10 @@ local function getNodeType(node: any): string
 
 	for _, pattern in patterns do
 		if pattern.check(node) then
-			return pattern.type
+			return pattern.nodeType
 		end
 	end
+
 	-- Fallback if no pattern matches
 	print(`Could not discriminate node type for tag "${tag}"`)
 	return tag

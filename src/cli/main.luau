@@ -11,8 +11,7 @@ local Process = require("@lute/process") -- Import process type definitions
 local Result = require("@batteries/result")
 local Rule = require("../plugin/rule")
 local fs = require("@lute/fs")
-local pp = require("../pretty-print")
-local types = require("../types")
+local pretty_print = require("../pretty-print")
 -- local FileProcessor = require("../core/file-processor") -- To be created
 -- local ConfigLoader = require("../config/loader") -- To be created
 
@@ -112,6 +111,11 @@ local function runLinter(parsedArgs: Args.ParsedArgs): number
 			return Parser.parse(content)
 		end)
 
+		pretty_print(processStatus.value)
+		if true then
+			return 0
+		end
+
 		assert(type(content) == "string", "Expected content to be a string")
 
 		if processStatus.success == false then
@@ -132,7 +136,7 @@ local function runLinter(parsedArgs: Args.ParsedArgs): number
 
 		local lintResult: PluginApi.LintResult
 		local lintStatus = Result.pcall(function(): PluginApi.LintResult
-			return engine.lintFile(ast, content, filePath)
+			return engine:lintFile(ast, content, filePath) :: any
 		end)
 
 		if lintStatus.success then
@@ -153,7 +157,7 @@ local function runLinter(parsedArgs: Args.ParsedArgs): number
 				.. issue.fix.text
 				.. string.sub(content, endOffset + 1)
 
-			local _writeStatus = Result.pcall(function()
+			local _writeStatus = Result.pcall(function(): nil
 				local file = Fs.open(filePath, "w+")
 				fs.write(file, content)
 				return nil

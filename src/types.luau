@@ -2983,6 +2983,44 @@ end
 
 ----------------------------------------------------------------------------------------
 
+--[=[
+    Removes all table properties whose key is a string starting with an underscore (“_”).
+    Works recursively through unions / intersections so that `OmitPrivates<T>` can be used
+    on any type that eventually contains one or more tables.
+
+    @category Table
+    @param input any -- Table, union or intersection to strip private keys from.
+
+    @example
+    type Result = OmitPrivates<{ _secret: number, visible: string }>
+    -- type Result = { visible: string }
+]=]
+export type function OmitPrivates(input: type)
+	-- Predicate to detect singleton string keys that start with "_"
+	local function is_private_key(keyType: type): boolean
+		if keyType.tag ~= "singleton" then
+			return false
+		end
+		local v = keyType:value()
+		return type(v) == "string" and string.sub(v, 1, 1) == "_"
+	end
+
+	local input_tag = input.tag
+
+	if input_tag == "union" then
+		return union_from_components(components_map(input:components(), OmitPrivates))
+			or types.never
+	elseif input_tag == "intersection" then
+		return intersection_from_components(components_map(input:components(), OmitPrivates))
+			or types.never
+	elseif input_tag == "table" then
+		-- Remove keys where predicate is true
+		return table_filter_by_keys(input, is_private_key)
+	else
+		return input
+	end
+end
+
 return nil
 
 --[[

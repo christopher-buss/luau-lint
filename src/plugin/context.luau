@@ -133,10 +133,16 @@ function Context.createFix(self: SourceContext, range: Rule.SourceRange, text: s
 end
 
 --[=[
-	Gets the source text for a specific range, or the entire source if no range provided.
+	Retrieves the source text for a specific node or range with optional padding.
 	
-	@param range any? -- Optional range to extract text from
-	@return string -- The source text for the specified range
+	This method extracts source code text from the current file, either for the entire
+	source (when no node is provided) or for a specific AST node's location. Optional
+	before and after padding allows retrieving additional context around the node.
+	
+	@param node Rule.LintNode? -- The AST node to get source text for (optional)
+	@param beforeCount number? -- Number of characters to include before the node (optional)
+	@param afterCount number? -- Number of characters to include after the node (optional)
+	@return string -- The extracted source text
 	
 	@since v0.1.0
 ]=]

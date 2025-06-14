@@ -73,7 +73,7 @@ export type SourcePosition = Rule.SourcePosition
 export type RuleRegistry = Registry.RuleRegistry
 export type RegisteredRule = Registry.RegisteredRule
 
-export type RuleEngine = Engine.RuleEngine
+export type RuleEngine = Engine.RuleEnginePublic
 export type LintResult = Engine.LintResult
 export type LintIssue = Engine.LintIssue
 export type LintStats = Engine.LintStats
@@ -130,7 +130,7 @@ end
 	@since v0.1.0
 ]=]
 local function createRuleEngine(registry: RuleRegistry): RuleEngine
-	return Engine.createRuleEngine(registry)
+	return Engine.new({ registry = registry })
 end
 
 --[=[

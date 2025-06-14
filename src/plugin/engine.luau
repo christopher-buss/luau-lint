@@ -50,8 +50,10 @@ local types = require("../types")
 type Omit<K, V> = types.Omit<K, V>
 type Pick<K, V> = types.Pick<K, V>
 type Required<T> = types.Required<T>
+type OmitPrivate<T> = types.OmitPrivates<T>
 
 type AstNode = Rule.AstNode
+type AnyNode = Rule.AnyNode
 type AstStatBlock = Luau.AstStatBlock
 type LintError = ErrorHandling.LintError
 type LintNode = Rule.LintNode
@@ -64,6 +66,51 @@ type RuleRegistry = Registry.RuleRegistry
 type RuleType = Rule.Rule
 
 local createLintError = ErrorHandling.createLintError
+local TraversalKeys = VisitorKeys.VisitorKeys
+
+--[=[
+	Merges properties from a source object into a target object.
+	
+	This is a shallow merge operation that copies all enumerable properties
+	from the source object to the target object. The target object is modified
+	in place and also returned.
+	
+	@param target T -- The target object to merge properties into
+	@param source U -- The source object to copy properties from
+	@return T & U -- The target object with merged properties
+	
+	@since v0.1.0
+]=]
+local function assign<T, U>(target: T, source: U): T & U
+	for k, v in source :: any do
+		(target :: any)[k] = v
+	end
+
+	return target
+end
+
+--[=[
+	Merges properties from a source object into a target object, creating a new object.
+	
+	This function creates a shallow copy of the target object and then copies all
+	enumerable properties from the source object into the copy. Unlike `assign`,
+	this function does not modify the original target object.
+	
+	@param target T -- The target object to use as the base
+	@param source U -- The source object to copy properties from
+	@return T & U -- A new object with properties from both target and source
+	
+	@since v0.1.0
+]=]
+local function merge<T, U>(target: T, source: U): T & U
+	local result = table.clone(target)
+
+	for key, value in source :: any do
+		(result :: any)[key] = value
+	end
+
+	return result
+end
 
 --[=[ 
 	@interface LintResult
@@ -114,17 +161,94 @@ export type LintStats = {
 }
 
 --[=[
+	Calculates the starting character offset for each line in the source text.
+	Line numbers are 1-indexed. Character offsets are 0-indexed.
+	
+	@param sourceText string -- The source code of the file
+	@return {number} -- An array where the index is the line number (1-based)
+		and the value is the character offset (0-based) of the start of that line.
+]=]
+local function calculateLineStartOffsets(sourceText: string): { number }
+	local offsets = { 0 }
+	local currentCharacterOffset = 0
+	for i = 1, #sourceText do
+		if sourceText:sub(i, i) == "\n" and i < #sourceText then
+			table.insert(offsets, currentCharacterOffset + 1)
+		end
+
+		currentCharacterOffset += 1
+	end
+
+	return offsets
+end
+
+--[=[
+	Normalizes the location information of an AST node.
+	
+	Some AST nodes have a `location` field with begin/end positions, while
+	others (like tokens) only have a `position` and `text`. This function
+	normalizes both cases into a consistent Location format.
+	
+	For nodes with only position/text, it calculates the end position by
+	adding the text length to the start position (assuming single-line text).
+	
+	@param node AnyNode -- The AST node to normalize location for
+	@return Luau.Location? -- The normalized location, or nil if insufficient data
+	
+	@since v0.1.0
+]=]
+local function normalizeLocation(node: AnyNode): Luau.Location?
+	if node.location ~= nil then
+		return node.location
+	end
+
+	if node.argLocation ~= nil then
+		return node.argLocation
+	end
+
+	if node.position == nil then
+		print("could not normalize")
+		return nil
+	end
+
+	local positionType = if node.position then "position" else "argLocation"
+
+	local startLine = node[positionType].line :: number
+	local startColumn = node[positionType].column :: number
+
+	assert(node.text, "Expected node.text to be defined")
+	local nodeTextLength = #node.text
+
+	return {
+		begin = {
+			line = startLine,
+			column = startColumn,
+		},
+		["end"] = {
+			line = startLine,
+			column = startColumn + nodeTextLength,
+		},
+	}
+end
+
+type RuleEngineOptions = {
+	registry: RuleRegistry,
+}
+
+type RuleEngineData = RuleEngineOptions
+
+local RuleEngine = {}
+RuleEngine.__index = RuleEngine
+
+type RuleEngine = setmetatable<RuleEngineData, typeof(RuleEngine)>
+
+--[=[
 	@interface RuleEngine
 	@within RuleEngine
-	.lintFile (ast: any, sourceText: string, filename: string?) -> LintResult -- Lint a file
-	.lintNode (node: any, sourceText: string, filename: string?) -> LintResult -- Lint a node
 	
 	Engine interface for executing rules against AST nodes.
 ]=]
-export type RuleEngine = {
-	lintFile: (ast: AstStatBlock, sourceText: string, filename: string) -> LintResult, -- Changed AstNode to AstStatBlock
-	lintNode: (node: AstNode, sourceText: string, filename: string) -> LintResult,
-}
+export type RuleEnginePublic = setmetatable<OmitPrivate<RuleEngineData>, typeof(RuleEngine)>
 
 --[=[
 	Creates a new rule execution engine.
@@ -137,357 +261,223 @@ export type RuleEngine = {
 	
 	@since v0.1.0
 ]=]
-local function createRuleEngine(registry: RuleRegistry): RuleEngine
-	--[=[
-		Calculates the starting character offset for each line in the source text.
-		Line numbers are 1-indexed. Character offsets are 0-indexed.
-		
-		@param sourceText string -- The source code of the file
-		@return {number} -- An array where the index is the line number (1-based)
-			and the value is the character offset (0-based) of the start of that line.
-	]=]
-	local function calculateLineStartOffsets(sourceText: string): { number }
-		local offsets = { 0 } -- Line 1 (1-indexed) starts at character offset 0
-		local currentCharacterOffset = 0
-		for i = 1, #sourceText do
-			-- currentCharacterOffset is the 0-indexed offset of the character sourceText:sub(i,i)
-			if sourceText:sub(i, i) == "\n" then
-				if i < #sourceText then -- Ensure there's a next line
-					-- The character after \n is at currentCharacterOffset + 1
-					table.insert(offsets, currentCharacterOffset + 1)
-				end
-			end
-			currentCharacterOffset += 1
-		end
-		return offsets
+function RuleEngine.new(options: RuleEngineOptions): RuleEnginePublic
+	return setmetatable(
+		merge(options, {
+			_lintNodes = setmetatable({}, { __mode = "k" }),
+		}),
+		RuleEngine
+	)
+end
+
+--[=[
+	Converts an AST node to a LintNode with normalized location information.
+	
+	This function transforms raw AST nodes into a standardized format that includes
+	consistent location data. It caches converted nodes to avoid duplicate processing
+	and ensures that location information is properly normalized.
+	
+	The function performs the following transformations:
+	- Normalizes location data from various AST node formats
+	- Adds placeholder character offsets (calculated later during traversal)
+	- Caches converted nodes to prevent reprocessing
+	- Returns nil for nodes without sufficient location information
+	
+	@param node AnyNode -- The raw AST node to convert
+	@return LintNode? -- The converted node with normalized location, or nil if conversion fails
+	
+	@since v0.1.0
+]=]
+function RuleEngine.createLintNode(self: RuleEngine, node: AnyNode): LintNode?
+	if type(node) ~= "table" then
+		return nil
 	end
 
-	local lintNodes: { [AstNode]: LintNode } = {}
-
-	local function assign<T, U>(target: T, source: U): T & U
-		for k, v in source :: any do
-			(target :: any)[k] = v
-		end
-
-		return target
+	local existingNode = node
+		and (node :: any).location ~= nil
+		and (node :: any).location.start ~= nil
+		and (node :: any).location.start.offset ~= nil
+	if existingNode then
+		return node :: any
 	end
 
-	local function normalizeLocation(node: AstNode): Luau.Location?
-		if node.location ~= nil then
-			return node.location
-		end
+	local location = normalizeLocation(node :: any)
+	if not location then
+		return nil
+	end
 
-		if node.position == nil then
-			return nil
-		end
-
-		local startLine = node.position.line
-
-		local startColumn = node.position.column
-		local nodeTextLength = #node.text
-
-		return {
-			begin = {
-				line = startLine,
-				column = startColumn,
+	local lintNode = assign(node, {
+		location = {
+			start = {
+				line = location.begin.line,
+				column = location.begin.column,
+				offset = -1,
 			},
-			["end"] = {
-				line = startLine,
-				column = startColumn + nodeTextLength,
+			finish = {
+				line = location["end"].line,
+				column = location["end"].column,
+				offset = -1,
 			},
-		}
-	end
-
-	local function createLintNode(node: AstNode & { location: Luau.Location? }): LintNode
-		if type(node) ~= "table" then
-			return nil
-		end
-
-		local existingNode = lintNodes[node] == true
-		if existingNode then
-			return node :: any
-		end
-
-		local location = normalizeLocation(node)
-		if not location then
-			return nil
-		end
-
-		local lintNode: LintNode = assign(node :: any, {
-			location = {
-				start = {
-					line = location.begin.line,
-					column = location.begin.column,
-					offset = -1,
-				},
-				finish = {
-					line = location["end"].line,
-					column = location["end"].column,
-					offset = -1,
-				},
-			},
-		}) :: any
-
-		lintNodes[node] = true
-		return lintNode
-	end
-
-	--[=[
-		Recursively traverses an AST node and its children.
-		
-		@param node any -- The AST node to traverse
-		@param visitors { [NodeType]: { { rule: RegisteredRule, listener: NodeListener | NodeListenerWithExit } } } -- Map of node types to listeners
-		@param context { [string]: any } -- Map of rule IDs to contexts
-		@param stats LintStats -- Statistics object to update
-		@param lineStartOffsets {number} -- Array of character offsets for the start of each line
-		
-		@since v0.1.0
-	]=]
-	local function traverseNode(
-		node: LintNode,
-		visitors: {
-			[NodeTag]: { { rule: RegisteredRule, listener: NodeListener | NodeListenerWithExit } },
 		},
-		contexts: { [string]: any },
-		stats: LintStats,
-		lineStartOffsets: { number }
-	): ()
-		if type(node) ~= "table" or not node.tag then
-			return
+	})
+
+	return lintNode
+end
+
+--[=[
+	Recursively traverses an AST node and its children.
+	
+	@param node any -- The AST node to traverse
+	@param visitors { [NodeType]: { { rule: RegisteredRule, listener: NodeListener | NodeListenerWithExit } } } -- Map of node types to listeners
+	@param context { [string]: any } -- Map of rule IDs to contexts
+	@param stats LintStats -- Statistics object to update
+	@param lineStartOffsets {number} -- Array of character offsets for the start of each line
+	
+	@since v0.1.0
+]=]
+function RuleEngine.traverseNode(
+	self: RuleEngine,
+	node: LintNode,
+	visitors: {
+		[NodeTag]: { { rule: RegisteredRule, listener: NodeListener | NodeListenerWithExit } },
+	},
+	contexts: { [string]: any },
+	stats: LintStats,
+	lineStartOffsets: { number }
+): ()
+	if type(node) ~= "table" or not node.tag then
+		return
+	end
+
+	stats.nodesVisited += 1
+
+	local loc = node.location
+	node.location.start.offset = lineStartOffsets[loc.start.line + 1] + loc.start.column
+	node.location.finish.offset = lineStartOffsets[loc.finish.line + 1] + loc.finish.column
+
+	local nodeType = VisitorKeys.getNodeType(node)
+
+	-- Call enter listeners for this node type
+	local nodeVisitors = (visitors :: {
+		[string]: { { rule: RegisteredRule, listener: NodeListener | NodeListenerWithExit } },
+	})[nodeType]
+	if nodeVisitors then
+		for _, visitor in nodeVisitors do
+			local status = Result.pcall(function(): nil
+				local listener = visitor.listener
+				if type(listener) == "function" then
+					listener(node)
+				elseif type(listener) == "table" and listener.enter then
+					listener.enter(node)
+				end
+
+				return nil
+			end)
+
+			if status.success == true then
+				continue
+			end
+
+			-- Record the error but continue execution
+			local _ruleError = createLintError(
+				"RuleError",
+				`Error in rule {visitor.rule.rule.id}`,
+				contexts[visitor.rule.rule.id].filename
+			)
+
+			pp(status.err)
+
+			-- TODO:: Collect these errors
 		end
+	end
 
-		stats.nodesVisited += 1
-
-		-- Calculate and attach character offsets if location is available
-		local loc = node.location
-		-- pp(node, { depth = 1, keys = { "location" } })
-		-- pp(lineStartOffsets)
-
-		node.location.start.offset = lineStartOffsets[loc.start.line + 1] + loc.start.column
-		node.location.finish.offset = lineStartOffsets[loc.finish.line + 1] + loc.finish.column
-
-		local nodeType = VisitorKeys.getNodeType(node)
-
-		-- Call enter listeners for this node type
-		local nodeVisitors = (visitors :: {
-			[string]: { { rule: RegisteredRule, listener: NodeListener | NodeListenerWithExit } },
-		})[nodeType]
-		if nodeVisitors then
-			for _, visitor in nodeVisitors do
-				local status = Result.pcall(function(): nil
-					local listener = visitor.listener
-					if type(listener) == "function" then
-						-- Simple function listener
-						listener(node)
-					elseif type(listener) == "table" and listener.enter then
-						-- Object with enter function
-						listener.enter(node)
+	local keys = TraversalKeys[nodeType]
+	if keys and #keys > 0 then
+		-- Recursively traverse child nodes
+		for _, value in keys :: { keyof<typeof(node)> } do
+			local childNode = node[value] :: AnyNode
+			if type(childNode) == "table" and childNode[1] ~= nil then
+				for _, child in childNode do
+					local lintNode = self:createLintNode(child.node :: any)
+					if not lintNode then
+						continue
 					end
 
-					return nil
-				end)
-
-				if status.success == true then
+					self:traverseNode(lintNode, visitors, contexts, stats, lineStartOffsets)
+				end
+			else
+				local lintNode = self:createLintNode(childNode :: any)
+				if not lintNode then
 					continue
 				end
 
-				-- Record the error but continue execution
-				local ruleError = createLintError(
-					"RuleError",
-					`Error in rule {visitor.rule.rule.id}`,
-					contexts[visitor.rule.rule.id].filename
-				)
-
-				pp(status.err)
-
-				-- TODO:: Collect these errors
-			end
-		end
-
-		-- if node.tag == "global" then
-		-- end
-
-		local keys = VisitorKeys.VisitorKeys[nodeType]
-		if keys and #keys > 0 then
-			-- Recursively traverse child nodes
-			for _, value in keys do
-				local childNode = node[value]
-				if type(childNode) == "table" and childNode[1] ~= nil then
-					for _, child in childNode do
-						traverseNode(
-							createLintNode(child.node),
-							visitors,
-							contexts,
-							stats,
-							lineStartOffsets
-						)
-					end
-				else
-					traverseNode(
-						createLintNode(childNode),
-						visitors,
-						contexts,
-						stats,
-						lineStartOffsets
-					)
-				end
-			end
-		end
-
-		-- Call exit listeners for this node type
-		if nodeVisitors then
-			for _, visitor in nodeVisitors do
-				local status = Result.pcall(function(): nil
-					local listener = visitor.listener
-					if type(listener) == "table" and listener.exit then
-						-- Object with exit function
-						listener.exit(node :: any)
-					end
-
-					return nil
-				end)
-
-				if status.success == true then
-					continue
-				end
-
-				-- Record the error but continue execution
-				local _ruleError = createLintError(
-					"RuleError",
-					`Error in rule {visitor.rule.rule.id} exit`,
-					{ filePath = contexts[visitor.rule.rule.id].filename :: string? }
-				)
-
-				pp(status.err)
-				-- Note: In a real implementation, we'd collect these errors
+				self:traverseNode(lintNode, visitors, contexts, stats, lineStartOffsets)
 			end
 		end
 	end
 
-	--[=[
-		Lints a complete AST representing a file.
-		
-		@param ast any -- The root AST node to lint
-		@param sourceText string -- The complete source text
-		@param filename string? -- Optional filename for context
-		@return LintResult -- The linting results
-		
-		@since v0.1.0
-	]=]
-	local function lintFile(ast: AstStatBlock, sourceText: string, filename: string): LintResult
-		local startTime = os.clock()
-
-		-- Initialize result collections
-		local allIssues: { LintIssue } = {}
-		local allErrors: { LintError } = {}
-		local lintStats: LintStats = {
-			executionTimeMs = 0,
-			fixableIssues = 0,
-			issuesFound = 0,
-			nodesVisited = 0,
-			rulesExecuted = 0,
-		}
-
-		-- Get all registered rules
-		local rules = registry.getAllRules()
-		if #rules == 0 then
-			lintStats.executionTimeMs = (os.clock() - startTime) * 1000
-			return {
-				issues = allIssues,
-				errors = allErrors,
-				lintStats = lintStats,
-			}
-		end
-
-		-- Calculate line start offsets once per file
-		local lineStartOffsets = calculateLineStartOffsets(sourceText)
-
-		-- Create contexts for each rule
-		local contexts: { [string]: any } = {}
-		local visitors: { [NodeTag]: { { rule: RegisteredRule, listener: NodeListener | NodeListenerWithExit } } } =
-			{}
-
-		local baseContext = Context.new({
-			-- cwd = process.cwd,
-			filename = filename,
-			sourceText = sourceText,
-		})
-
-		for _, registeredRule in rules do
-			if not registeredRule.enabled then
-				continue
-			end
-
-			lintStats.rulesExecuted += 1
-
-			local context = baseContext:extend({
-				ruleId = registeredRule.rule.id,
-				options = registeredRule.options,
-				report = function(self, issue: RuleIssue): ()
-					print("-------------")
-					local lintIssue: LintIssue = {
-						ruleId = registeredRule.rule.id,
-						message = issue.message,
-						node = issue.node,
-						loc = issue.node.location,
-						fix = issue.fix,
-					}
-					table.insert(allIssues, lintIssue)
-					lintStats.issuesFound += 1
-					lintStats.fixableIssues += if issue.fix ~= nil then 1 else 0
-				end,
-			})
-
-			contexts[registeredRule.rule.id] = context
-
-			-- Get listeners from the rule
-			local status = Result.pcall(function(): Rule.ListenerMap
-				return registeredRule.rule.create(context :: any)
-			end)
-			if status.success == false then
-				local ruleError = createLintError(
-					"RuleError",
-					`Failed to create listeners for rule {registeredRule.rule.id}: {status.err}`,
-					{ filePath = filename }
-				)
-				table.insert(allErrors, ruleError)
-				continue
-			end
-
-			local listeners = status.value
-			-- Validate listeners
-			local isValid, errorMessage = Rule.validateListenerMap(listeners)
-			if not isValid then
-				local ruleError = createLintError(
-					"RuleError",
-					`Invalid listeners for rule {registeredRule.rule.id}: {errorMessage}`,
-					{ filePath = filename }
-				)
-				table.insert(allErrors, ruleError)
-				continue
-			end
-
-			-- Register listeners by node type
-			for nodeType, listener in listeners :: { [string]: NodeListener | NodeListenerWithExit } do
-				if not visitors[nodeType :: NodeTag] then
-					visitors[nodeType :: NodeTag] = {}
+	-- Call exit listeners for this node type
+	if nodeVisitors then
+		for _, visitor in nodeVisitors do
+			local status = Result.pcall(function(): nil
+				local listener = visitor.listener
+				if type(listener) == "table" and listener.exit then
+					listener.exit(node)
 				end
-				table.insert(visitors[nodeType :: NodeTag], {
-					rule = registeredRule,
-					listener = listener,
-				})
+
+				return nil
+			end)
+
+			if status.success == true then
+				continue
 			end
+
+			-- Record the error but continue execution
+			local _ruleError = createLintError(
+				"RuleError",
+				`Error in rule {visitor.rule.rule.id} exit`,
+				{ filePath = contexts[visitor.rule.rule.id].filename :: string? }
+			)
+
+			pp(status.err)
+			-- Note: In a real implementation, we'd collect these errors
 		end
+	end
+end
 
-		for _, statement in ast.statements do
-			-- Traverse the AST
+--[=[
+	Lints a complete AST representing a file.
+	
+	@param ast any -- The root AST node to lint
+	@param sourceText string -- The complete source text
+	@param filename string? -- Optional filename for context
+	@return LintResult -- The linting results
+	
+	@since v0.1.0
+]=]
+function RuleEngine.lintFile(
+	self: RuleEngine,
+	ast: AstStatBlock,
+	sourceText: string,
+	filename: string
+): LintResult
+	local startTime = os.clock()
 
-			traverseNode(createLintNode(statement), visitors, contexts, lintStats, lineStartOffsets)
-		end
+	-- Initialize result collections
+	local allIssues: { LintIssue } = {}
+	local allErrors: { LintError } = {}
+	local lintStats: LintStats = {
+		executionTimeMs = 0,
+		fixableIssues = 0,
+		issuesFound = 0,
+		nodesVisited = 0,
+		rulesExecuted = 0,
+	}
 
-		-- Calculate execution time
+	-- Get all registered rules
+	local rules = self.registry.getAllRules()
+	if #rules == 0 then
 		lintStats.executionTimeMs = (os.clock() - startTime) * 1000
-
 		return {
 			issues = allIssues,
 			errors = allErrors,
@@ -495,29 +485,138 @@ local function createRuleEngine(registry: RuleRegistry): RuleEngine
 		}
 	end
 
-	--[=[
-		Lints a single AST node (useful for testing or partial linting).
-		
-		@param node any -- The AST node to lint
-		@param sourceText string -- The complete source text
-		@param filename string? -- Optional filename for context
-		@return LintResult -- The linting results
-		
-		@since v0.1.0
-	]=]
-	local function lintNode(node: AstNode, sourceText: string, filename: string): LintResult
-		-- For single node linting, we treat the node as the root
-		-- This will implicitly use the new lineStartOffsets logic via lintFile
-		return lintFile(node, sourceText, filename)
+	-- Calculate line start offsets once per file
+	local lineStartOffsets = calculateLineStartOffsets(sourceText)
+
+	-- Create contexts for each rule
+	local contexts: { [string]: any } = {}
+	local visitors: { [NodeTag]: { { rule: RegisteredRule, listener: NodeListener | NodeListenerWithExit } } } =
+		{}
+
+	local baseContext = Context.new({
+		-- cwd = process.cwd,
+		filename = filename,
+		sourceText = sourceText,
+	})
+
+	for _, registeredRule in rules do
+		if not registeredRule.enabled then
+			continue
+		end
+
+		lintStats.rulesExecuted += 1
+
+		local context = baseContext:extend({
+			ruleId = registeredRule.rule.id,
+			options = registeredRule.options,
+			report = function(_, issue: RuleIssue): ()
+				local location = issue.loc or (issue.node and issue.node.location)
+				if location == nil then
+					local ruleError = createLintError(
+						"RuleError",
+						`Error in rule {registeredRule.rule.id} report. Missing location.`,
+						{ filePath = filename }
+					)
+					table.insert(allErrors, ruleError)
+					return
+				end
+
+				local lintIssue: LintIssue = {
+					ruleId = registeredRule.rule.id,
+					message = issue.message,
+					node = issue.node,
+					loc = location,
+					fix = issue.fix,
+				}
+				table.insert(allIssues, lintIssue)
+				lintStats.issuesFound += 1
+				lintStats.fixableIssues += if issue.fix ~= nil then 1 else 0
+			end,
+		})
+
+		contexts[registeredRule.rule.id] = context
+
+		-- Get listeners from the rule
+		local status = Result.pcall(function(): Rule.ListenerMap
+			return registeredRule.rule.create(context :: any)
+		end)
+		if status.success == false then
+			local ruleError = createLintError(
+				"RuleError",
+				`Failed to create listeners for rule {registeredRule.rule.id}: {status.err}`,
+				{ filePath = filename }
+			)
+			table.insert(allErrors, ruleError)
+			continue
+		end
+
+		local listeners = status.value
+
+		-- Validate listeners
+		local isValid, errorMessage = Rule.validateListenerMap(listeners)
+		if not isValid then
+			local ruleError = createLintError(
+				"RuleError",
+				`Invalid listeners for rule {registeredRule.rule.id}: {errorMessage}`,
+				{ filePath = filename }
+			)
+			table.insert(allErrors, ruleError)
+			continue
+		end
+
+		-- Register listeners by node type
+		for nodeType, listener in listeners :: { [string]: NodeListener | NodeListenerWithExit } do
+			if not visitors[nodeType :: NodeTag] then
+				visitors[nodeType :: NodeTag] = {}
+			end
+			table.insert(visitors[nodeType :: NodeTag], {
+				rule = registeredRule,
+				listener = listener,
+			})
+		end
 	end
 
-	-- Return the engine interface
+	for _, statement in ast.statements do
+		-- Traverse the AST
+		local lintNode = self:createLintNode(statement :: any)
+		if lintNode then
+			self:traverseNode(lintNode, visitors, contexts, lintStats, lineStartOffsets)
+		end
+	end
+
+	-- Calculate execution time
+	lintStats.executionTimeMs = (os.clock() - startTime) * 1000
+
 	return {
-		lintFile = lintFile,
-		lintNode = lintNode,
+		issues = allIssues,
+		errors = allErrors,
+		lintStats = lintStats,
 	}
 end
 
-return {
-	createRuleEngine = createRuleEngine,
-}
+--[=[
+	Lints a single AST node (useful for testing or partial linting).
+	
+	@param node any -- The AST node to lint
+	@param sourceText string -- The complete source text
+	@param filename string? -- Optional filename for context
+	@return LintResult -- The linting results
+	
+	@since v0.1.0
+]=]
+function RuleEngine.lintNode(
+	self: RuleEngine,
+	node: AstNode,
+	sourceText: string,
+	filename: string
+): LintResult
+	local syntheticBlock: AstStatBlock = {
+		tag = "block",
+		statements = { node :: any },
+	}
+
+	return self:lintFile(syntheticBlock, sourceText, filename)
+end
+
+-- Return the engine interface
+return RuleEngine :: Pick<RuleEngine, "new">

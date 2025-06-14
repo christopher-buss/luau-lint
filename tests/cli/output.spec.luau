@@ -204,3 +204,5 @@ end
 
 local collectedTests = Tiniest.collect_tests(defineOutputTests)
 Tiniest.run_tests(collectedTests, {})
+
+return nil
