@@ -28,3 +28,24 @@ Cargo.lock
 # Test outputs
 test-results/
 coverage/
+
+# Environment variables
+.env
+.envrc
+
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS specific
+# Task files
+tasks.json
+tasks/
+
+# https://github.com/anthropics/claude-code/issues/1254
+.mcp.json
