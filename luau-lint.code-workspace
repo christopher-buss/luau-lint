@@ -18,5 +18,6 @@
 		"git.inputValidation": true,
 		"git.inputValidationLength": 100,
 		"git.inputValidationSubjectLength": 72,
+		"luau-lsp.fflags.enableByDefault": false,
 	},
 }

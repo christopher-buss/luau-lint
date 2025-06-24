@@ -1,0 +1,7 @@
+{
+	"aliases": {
+		"tiniest": "tiniest",
+		"lute": "../lute/definitions",
+		"batteries": "../lute/batteries"
+	}
+}

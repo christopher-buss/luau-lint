@@ -1,0 +1,23 @@
+# Plugin API Package - Public API for rule authors
+
+name = "luau_lint/plugin_api"
+version = "0.1.0"
+description = "Public API for creating luau-lint rules and plugins"
+license = "MIT"
+authors = ["Luau-Lint Contributors"]
+repository = "https://github.com/your-org/luau-lint"
+
+# Runtime targets
+[target]
+environment = "luau"
+lib = "src/init.luau"
+
+includes = ["pesde.toml", "README.md", "LICENSE", "src/**/*.luau"]
+
+# Dependencies
+[dependencies]
+# Workspace dependencies
+core = { workspace = "luau_lint/core", version = "^" }
+
+# This package provides the public API but needs core functionality
+# Rules will depend on this package, so we keep external deps minimal

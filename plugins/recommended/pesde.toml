@@ -1,0 +1,26 @@
+# Recommended Rules Plugin - Default rule set
+
+name = "luau_lint/recommended_rules" 
+version = "0.1.0"
+description = "Default recommended rules for luau-lint"
+license = "MIT"
+authors = ["Luau-Lint Contributors"]
+repository = "https://github.com/your-org/luau-lint"
+
+# Runtime targets
+[target]
+environment = "luau"
+lib = "src/init.luau"
+
+# Dependencies
+[dependencies]
+# This plugin depends on the plugin API to implement rules
+luau_lint-plugin_api = { workspace = "luau_lint/plugin_api", version = "^" }
+
+# Luau-lint metadata for plugin discovery
+[luau-lint-plugin]
+plugin = true
+rules = [
+    "generalized-iteration"
+]
+categories = ["recommended", "performance", "style"]

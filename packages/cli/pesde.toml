@@ -1,0 +1,22 @@
+# CLI Package - Command-line interface
+
+name = "luau_lint/cli"
+version = "0.1.0"
+description = "Command-line interface for luau-lint"
+license = "MIT"
+authors = ["Luau-Lint Contributors"]
+repository = "https://github.com/your-org/luau-lint"
+
+# Runtime targets - CLI uses Luau environment with binary executable
+[target]
+environment = "luau"
+bin = "src/main.luau"
+
+# Dependencies
+[dependencies]
+# Workspace dependencies
+core = { workspace = "luau_lint/core", version = "^" }
+plugin_api = { workspace = "luau_lint/plugin_api", version = "^" }
+config = { workspace = "luau_lint/config", version = "^" }
+
+# External dependencies will be added when valid Pesde packages are available

@@ -1,0 +1,7 @@
+{
+	"aliases": {
+		"config": "luau_packages/config.luau",
+		"core": "luau_packages/core.luau",
+		"plugin_api": "luau_packages/plugin_api.luau"
+	}
+}

@@ -1,0 +1,6 @@
+{
+	"aliases": {
+		"core": "luau_packages/core",
+		"lute": "../../lute/definitions"
+	}
+}

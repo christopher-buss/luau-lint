@@ -1,0 +1,8 @@
+{
+	"aliases": {
+		"plugin_api": "luau_packages/plugin_api",
+		"lute": "../../lute/definitions",
+		"batteries": "../../lute/batteries",
+		"self": "src"
+	}
+}

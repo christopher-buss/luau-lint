@@ -4,5 +4,8 @@
 # New tools can be added by running `rokit add <tool>` in a terminal.
 
 [tools]
+luau-lsp = "JohnnyMorganz/luau-lsp@1.50.0"
+lune = "lune-org/lune@0.9.4"
 lute = "luau-lang/lute@0.1.0-nightly.20250607"
+pesde = "pesde-pkg/pesde@0.7.0-rc.4+registry.0.2.3-rc.2"
 stylua = "JohnnyMorganz/StyLua@2.1.0"

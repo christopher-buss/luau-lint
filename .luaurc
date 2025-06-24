@@ -1,9 +1,11 @@
 {
-    "languageMode": "strict",
-    "aliases": {
-        "batteries": "./lute/batteries",
-        "std": "./lute/std/libs",
-        "lute": "./lute/definitions",
-        "tiniest": "./tests/tiniest"
-    }
+	"languageMode": "strict",
+	"lintErrors": false,
+	"lint": {
+		"*": true
+	},
+	"typeErrors": true,
+	"aliases": {
+		"lune": "~/.lune/.typedefs/0.9.4/"
+	}
 }

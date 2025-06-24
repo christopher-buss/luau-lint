@@ -1,0 +1,16 @@
+# Luau-Lint Monorepo Workspace Configuration
+# This is the root pesde.toml file that defines the workspace structure
+
+name = "luau_lint/workspace"
+version = "0.1.0"
+description = "A modern, extensible linter for Luau, built in Luau."
+license = "MIT"
+authors = ["christopher-buss"]
+private = true
+
+# Workspace members - packages that are part of this workspace
+workspace_members = ["packages/*"]
+
+# Target configuration for the workspace
+[target]
+environment = "luau"

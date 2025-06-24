@@ -1,0 +1,19 @@
+# Configuration Package - Config loading and validation
+
+name = "luau_lint/config"
+version = "0.1.0"
+description = "Configuration system for luau-lint"
+license = "MIT"
+authors = ["Luau-Lint Contributors"]
+repository = "https://github.com/your-org/luau-lint"
+
+# Runtime targets
+[target]
+environment = "luau"
+lib = "src/init.luau"
+
+includes = ["pesde.toml", "README.md", "LICENSE", "src/**/*.luau"]
+
+# Dependencies
+[dependencies]
+# External dependencies will be added when valid Pesde packages are available

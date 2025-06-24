@@ -21,6 +21,11 @@ Thumbs.db
 
 node_modules/
 
+# Pesde package manager
+.pesde/
+**/pesde_packages/
+**/luau_packages/
+
 # Rust specific
 Cargo.lock
 *.pdb

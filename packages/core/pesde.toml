@@ -1,0 +1,22 @@
+# Core Linting Engine Package
+
+name = "luau_lint/core"
+version = "0.1.0"
+description = "Core linting engine for luau-lint - rule execution, registry, and AST traversal"
+license = "MIT"
+authors = ["Luau-Lint Contributors"]
+repository = "https://github.com/your-org/luau-lint"
+
+# Runtime targets
+[target]
+environment = "luau"
+lib = "src/init.luau"
+
+includes = ["pesde.toml", "README.md", "LICENSE", "src/**/*.luau"]
+
+# Dependencies
+[dependencies]
+
+# Development dependencies
+[dev-dependencies]
+test_utils = { workspace = "luau_lint/test_utils", version = "^" }
