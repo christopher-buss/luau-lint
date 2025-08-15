@@ -1,3 +1,9 @@
+I am no longer working in Luau, therefore this project has been parked for now.
+
+I may revive it in the future, but for now there is nothing more to see here.
+
+---
+
 # Luau Linter
 
 A modern, extensible linter for Luau, built in Luau.
